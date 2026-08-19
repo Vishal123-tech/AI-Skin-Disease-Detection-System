@@ -20,8 +20,6 @@ Educational prototype for capturing a skin image, running a TensorFlow Lite clas
 
 ## Quick start on Windows/Linux
 
-On Windows, you can double-click `START_PROJECT.bat` in this folder.
-
 ```bash
 python -m venv .venv
  .venv\\Scripts\\activate       # Windows
