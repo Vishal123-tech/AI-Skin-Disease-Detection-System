@@ -1,8 +1,9 @@
 # AI Skin Disease Detection Prototype
 
-GitHub repository: https://github.com/Vishal123-tech/AI-Skin-Disease-Detection-System
+[![View Repository](https://img.shields.io/badge/GitHub-View%20Repository-181717?logo=github)](https://github.com/Vishal123-tech/AI-Skin-Disease-Detection-System)
+[![Launch Local Demo](https://img.shields.io/badge/Demo-Launch%20Local%20App-1976D2)](http://127.0.0.1:5000/)
 
-Local demo: http://127.0.0.1:5000/
+**Project links:** [View Repository](https://github.com/Vishal123-tech/AI-Skin-Disease-Detection-System) · [Launch Local Demo](http://127.0.0.1:5000/)
 
 Educational prototype for capturing a skin image, running a TensorFlow Lite classifier, and generating a PDF report.
 
