@@ -1,0 +1,11 @@
+Flask>=3.0
+numpy>=1.26
+Pillow>=10.0
+opencv-python-headless>=4.9
+reportlab>=4.0
+
+# Optional: needed only for train.py or real .tflite inference.
+# Install separately with: pip install tensorflow
+
+# Optional on Raspberry Pi OS; install with the OS package manager when available:
+# picamera2
