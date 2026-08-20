@@ -3,7 +3,8 @@ title: AI Skin Disease Detection
 emoji: 🩺
 colorFrom: blue
 colorTo: green
-sdk: docker
+sdk: gradio
+app_file: gradio_app.py
 app_port: 7860
 short_description: AI-powered skin lesion image classification demo
 ---
@@ -25,7 +26,7 @@ python app.py --host 0.0.0.0
 
 Then find your computer's local IP address with `ipconfig` and share `http://YOUR_IP:5000` with devices on the same network.
 
-For a public internet link, deploy this repository to Render. The included `render.yaml` and `requirements-deploy.txt` configure the web service automatically. After deployment, Render will provide a public HTTPS URL that can be shared with anyone.
+For a public internet link, create a Hugging Face Space using the **Gradio** SDK and upload this repository. The Space uses `gradio_app.py` and `requirements-space.txt`; after the build completes, Hugging Face provides a public HTTPS URL that can be shared with anyone.
 
 Educational prototype for capturing a skin image, running a TensorFlow Lite classifier, and generating a PDF report.
 
