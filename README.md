@@ -1,3 +1,13 @@
+---
+title: AI Skin Disease Detection
+emoji: 🩺
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+short_description: AI-powered skin lesion image classification demo
+---
+
 # AI Skin Disease Detection Prototype
 
 [![View Repository](https://img.shields.io/badge/GitHub-View%20Repository-181717?logo=github)](https://github.com/Vishal123-tech/AI-Skin-Disease-Detection-System)
