@@ -5,6 +5,18 @@
 
 **Project links:** [View Repository](https://github.com/Vishal123-tech/AI-Skin-Disease-Detection-System) · [Launch Local Demo](http://127.0.0.1:5000/)
 
+## Share the app with other people
+
+The local demo link works only on the computer running Flask. To test from another device on the same Wi-Fi, start the app with:
+
+```bash
+python app.py --host 0.0.0.0
+```
+
+Then find your computer's local IP address with `ipconfig` and share `http://YOUR_IP:5000` with devices on the same network.
+
+For a public internet link, deploy this repository to Render. The included `render.yaml` and `requirements-deploy.txt` configure the web service automatically. After deployment, Render will provide a public HTTPS URL that can be shared with anyone.
+
 Educational prototype for capturing a skin image, running a TensorFlow Lite classifier, and generating a PDF report.
 
 > This is not a medical diagnostic device. Predictions must not replace a qualified dermatologist.
