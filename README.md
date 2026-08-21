@@ -6,102 +6,112 @@ colorTo: green
 sdk: gradio
 app_file: gradio_app.py
 app_port: 7860
-short_description: AI-powered skin lesion image classification demo
+short_description: AI skin lesion and normal skin image classification demo
 ---
 
-# AI Skin Disease Detection Prototype
+# AI Skin Disease & Normal Skin Detection Prototype
 
 [![View Repository](https://img.shields.io/badge/GitHub-View%20Repository-181717?logo=github)](https://github.com/Vishal123-tech/AI-Skin-Disease-Detection-System)
 [![Launch Live Web App](https://img.shields.io/badge/Demo-Launch%20Live%20App-4CAF50)](https://ai-skin-disease-detection-system.onrender.com)
 
 **Project links:** [View Repository](https://github.com/Vishal123-tech/AI-Skin-Disease-Detection-System) · [Launch Live Web App](https://ai-skin-disease-detection-system.onrender.com)
 
-## Share the app with other people
+Educational prototype for capturing skin images, checking photo quality, running a LiteRT/TensorFlow Lite classifier for **skin disease lesions**, **normal healthy skin**, and **non-skin objects**, and generating a PDF report.
 
-The local demo link works only on the computer running Flask. To test from another device on the same Wi-Fi, start the app with:
+> **Disclaimer:** This is an educational research prototype and not a medical diagnostic device. Predictions must never replace a qualified dermatologist or medical practitioner.
 
-```bash
-python app.py --host 0.0.0.0
-```
-
-Then find your computer's local IP address with `ipconfig` and share `http://YOUR_IP:5000` with devices on the same network.
-
-For a public internet link, create a Hugging Face Space using the **Gradio** SDK and upload this repository. The Space uses `gradio_app.py` and `requirements-space.txt`; after the build completes, Hugging Face provides a public HTTPS URL that can be shared with anyone.
-
-Educational prototype for capturing a skin image, running a TensorFlow Lite classifier, and generating a PDF report.
-
-> This is not a medical diagnostic device. Predictions must not replace a qualified dermatologist.
+---
 
 ## Features
 
-- Raspberry Pi Camera capture, with USB/webcam fallback
-- Image-quality checks for blur, brightness, and minimum resolution
-- TensorFlow Lite image classification
-- Demo mode when no model is installed
-- PDF report with image, prediction, confidence, timestamp, and disclaimer
-- Training script for transfer learning with an `ImageFolder` dataset
+- **Multi-Class Skin & Non-Skin Classification:** Distinguishes between skin disease lesions, **Normal Healthy Skin**, and **Non-Skin/Other Objects** to eliminate false positive disease diagnoses.
+- **Out-of-Distribution Guardrails:** Low-confidence predictions (<45%) are automatically flagged as uncertain or non-skin inputs.
+- **Image Quality Checks:** Automated checks for blur, brightness, and resolution.
+- **LiteRT / TFLite Inference:** Lightweight, hardware-friendly local inference on PC and Raspberry Pi.
+- **Demo Mode:** Fully functional workflow even when TensorFlow models are not installed.
+- **PDF Report Generation:** Generates styled diagnostic reports with images, classification category, confidence, and quality metrics.
+- **Dataset Setup & Augmentation:** Built-in `setup_dataset.py` helper to structure class folders and generate synthetic samples.
 
-## Quick start on Windows/Linux
+---
+
+## Quick Start on Windows / Linux / macOS
 
 ```bash
+# 1. Create and activate virtual environment
 python -m venv .venv
- .venv\\Scripts\\activate       # Windows
-source .venv/bin/activate        # Linux/Raspberry Pi
+.venv\Scripts\activate       # Windows
+source .venv/bin/activate    # Linux / macOS / Raspberry Pi
+
+# 2. Install dependencies
 pip install -r requirements.txt
+
+# 3. Launch Flask Web Application
 python app.py
 ```
 
-Open `http://127.0.0.1:5000` and upload a skin image. The report is saved in `reports/`.
+Open `http://127.0.0.1:5000` in your browser to analyze images.
 
-## Raspberry Pi camera
+---
 
-Install Picamera2 through Raspberry Pi OS, then run:
+## Share the Web App
+
+### Local Wi-Fi Network
+```bash
+python app.py --host 0.0.0.0
+```
+Find your local IP address using `ipconfig` (Windows) or `ifconfig` (Linux) and share `http://YOUR_IP:5000` with devices on the same Wi-Fi.
+
+### Gradio Interface & Public Hugging Face Space
+Run the Gradio interface:
+```bash
+python gradio_app.py
+```
+Upload this repository to a Hugging Face Space using the **Gradio** SDK (`app_file: gradio_app.py`, `requirements-space.txt`) to generate a public HTTPS URL.
+
+---
+
+## Dataset & Training Guide
+
+### 1. Set Up Dataset Folder Structure
+Run `setup_dataset.py` to automatically create all 8 class directories (`Actinic Keratoses`, `Basal Cell Carcinoma`, `Benign Keratosis like Lesions`, `Dermatofibroma`, `Melanocytic Nevi`, `Vascular Lesions`, `Normal_Skin`, `Other_Non_Skin`):
 
 ```bash
-python app.py --camera
+python setup_dataset.py
 ```
 
-The app will use the Pi camera when available and fall back to an uploaded image when it is not.
-
-## Included model
-
-The project includes `models/skin_model.tflite` and `models/labels.txt`, sourced from the open-source [Skin-Disease-Detection-App](https://github.com/ananmaysuri/Skin-Disease-Detection-App) repository. It is a cancer-lesion classifier with six classes. The included model is for educational experimentation only; it has not been clinically validated for this project.
-
-To enable real inference, install TensorFlow separately:
-
+To test the training pipeline immediately with synthetic sample images:
 ```bash
-pip install tensorflow
+python setup_dataset.py --generate-samples
 ```
 
-If TensorFlow is unavailable, the web app remains usable in clearly labelled demo mode.
-
-## Replace the model
-
-Place these files in `models/`:
-
-- `skin_model.tflite`
-- `labels.txt` — one class name per line, in model output order
-
-Without these files, the app uses a clearly marked demo prediction so the complete workflow can be tested.
-
-## Train a model
-
-Arrange images like this:
-
+### 2. Organize your Data
+Place your image files (`.jpg`, `.png`) under `data/skin/`:
 ```text
 data/skin/
-  train/acne/*.jpg
-  train/eczema/*.jpg
-  train/melanoma/*.jpg
-  val/acne/*.jpg
-  val/eczema/*.jpg
-  val/melanoma/*.jpg
+  train/
+    Normal_Skin/*.jpg
+    Other_Non_Skin/*.jpg
+    Actinic Keratoses/*.jpg
+    ...
+  val/
+    Normal_Skin/*.jpg
+    Other_Non_Skin/*.jpg
+    Actinic Keratoses/*.jpg
+    ...
 ```
 
-Then run:
-
+### 3. Train & Export the Model
 ```bash
-python train.py --data data/skin --output models/skin_model.tflite --labels models/labels.txt
+python train.py --data data/skin --epochs 8 --fine-tune-epochs 4 --output models/skin_model.tflite --labels models/labels.txt
 ```
 
-Use legally obtained, clinically appropriate data. Do not scrape or redistribute patient images without permission.
+---
+
+## Inference Runtimes
+
+Local inference automatically selects the best available engine in order of preference:
+1. `ai-edge-litert` (Google LiteRT)
+2. `tflite-runtime`
+3. `tensorflow`
+
+If no runtime or model file is present, the app gracefully operates in **Demo Mode**.

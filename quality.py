@@ -19,8 +19,8 @@ def check_image(path: str, min_width: int = 200, min_height: int = 200) -> Quali
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blur = float(cv2.Laplacian(gray, cv2.CV_64F).var())
     brightness = float(np.mean(gray))
-    if blur < 40:
+    if blur < 12.0:
         return QualityResult(False, blur, brightness, "Image is too blurry. Hold the camera steady and retake it.")
-    if brightness < 35 or brightness > 225:
+    if brightness < 30 or brightness > 230:
         return QualityResult(False, blur, brightness, "Lighting is unsuitable. Use even, indirect light and retake it.")
     return QualityResult(True, blur, brightness, "Image quality is acceptable.")
