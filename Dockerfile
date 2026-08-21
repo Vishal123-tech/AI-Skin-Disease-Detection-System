@@ -4,7 +4,7 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 ENV PORT=7860
 
-COPY requirements-deploy.txt .
+COPY requirements.txt requirements-deploy.txt .
 RUN pip install --no-cache-dir -r requirements-deploy.txt
 
 COPY . .
