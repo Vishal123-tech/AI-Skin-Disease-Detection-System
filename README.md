@@ -12,9 +12,9 @@ short_description: AI-powered skin lesion image classification demo
 # AI Skin Disease Detection Prototype
 
 [![View Repository](https://img.shields.io/badge/GitHub-View%20Repository-181717?logo=github)](https://github.com/Vishal123-tech/AI-Skin-Disease-Detection-System)
-[![Launch Local Demo](https://img.shields.io/badge/Demo-Launch%20Local%20App-1976D2)](http://127.0.0.1:5000/)
+[![Launch Live Web App](https://img.shields.io/badge/Demo-Launch%20Live%20App-4CAF50)](https://ai-skin-disease-detection-system.onrender.com)
 
-**Project links:** [View Repository](https://github.com/Vishal123-tech/AI-Skin-Disease-Detection-System) · [Launch Local Demo](http://127.0.0.1:5000/)
+**Project links:** [View Repository](https://github.com/Vishal123-tech/AI-Skin-Disease-Detection-System) · [Launch Live Web App](https://ai-skin-disease-detection-system.onrender.com)
 
 ## Share the app with other people
 
