@@ -1,5 +1,6 @@
 from pathlib import Path
 from datetime import datetime
+import os
 import gradio as gr
 
 from config import MODEL_PATH, LABELS_PATH, UPLOAD_DIR, REPORT_DIR
@@ -8,6 +9,7 @@ from quality import check_image
 from report import create_report
 
 predictor = SkinPredictor(MODEL_PATH, LABELS_PATH)
+PORT = int(os.environ.get("PORT", 7860))
 
 def analyze(image_path):
     if not image_path:
@@ -59,4 +61,4 @@ with gr.Blocks(title='AI Skin Disease Detection') as demo:
     analyze_button.click(analyze, inputs=image, outputs=[result, report_file])
 
 if __name__ == '__main__':
-    demo.launch(server_name='0.0.0.0', server_port=7860)
+    demo.launch(server_name='0.0.0.0', server_port=PORT, share=False)
