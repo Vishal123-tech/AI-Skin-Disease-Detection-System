@@ -3,5 +3,5 @@ services:
     name: ai-skin-disease-detection
     runtime: python
     buildCommand: pip install -r requirements-deploy.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app
+    startCommand: python gradio_app.py
     healthCheckPath: /
