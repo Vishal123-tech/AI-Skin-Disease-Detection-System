@@ -467,9 +467,9 @@ class SkinPredictor:
                 genai.configure(api_key=api_key)
                 self.gemini_model = genai.GenerativeModel("gemini-1.5-flash")
                 self.backend = "gemini"
-                print("✅ Gemini Vision API ready — 30+ disease detection enabled")
+                print("Gemini Vision API ready - 30+ disease detection enabled")
             except Exception as exc:
-                print(f"⚠️  Gemini API failed to load: {exc}")
+                print(f"Gemini API failed to load: {exc}")
 
         # ── 2. Load local model (fallback) ────────────────────────────────────
         if self.gemini_model is None:
@@ -504,11 +504,11 @@ class SkinPredictor:
                     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
                 ])
                 self.backend = "pytorch"
-                print(f"✅ PyTorch model loaded ({len(self.labels)} classes, device={self.device})")
+                print(f"PyTorch model loaded ({len(self.labels)} classes, device={self.device})")
                 return
             except Exception as exc:
                 self.load_error = str(exc)
-                print(f"⚠️  PyTorch load failed: {exc}")
+                print(f"PyTorch load failed: {exc}")
 
         # TFLite
         if self.model_path.exists():
@@ -531,11 +531,11 @@ class SkinPredictor:
                 shape = self.interpreter.get_input_details()[0]["shape"]
                 if len(shape) == 4:
                     self.image_size = (int(shape[2]), int(shape[1]))
-                print(f"✅ TFLite model loaded ({len(self.labels)} classes, backend={self.backend})")
+                print(f"TFLite model loaded ({len(self.labels)} classes, backend={self.backend})")
             except Exception as exc:
                 self.interpreter = None
                 self.load_error = str(exc)
-                print(f"⚠️  TFLite load failed: {exc}")
+                print(f"TFLite load failed: {exc}")
 
     # ─────────────────────────────────────────────────────────────────────────
     @property
@@ -729,8 +729,17 @@ RULES:
         norm = raw_label.lower().replace("_", " ")
 
         # ── Decision logic ────────────────────────────────────────────────────
+        # Strong non-skin rejection: if almost no skin-tone pixels are present,
+        # never allow the classifier to force a disease label onto an object.
+        # The HSV gate is intentionally conservative so darker skin tones are
+        # not rejected solely by this heuristic.
+        if skin_ratio < 0.05:
+            category = "non_skin"
+            info = DISEASE_INFO["Other_Non_Skin"]
+            label = f"{info['emoji']} Not a Skin Image — Please upload a photo of skin"
+
         # Non-skin: HSV check failed AND model is uncertain
-        if not is_skin_color and confidence < 0.65:
+        elif not is_skin_color and confidence < 0.65:
             category = "non_skin"
             info = DISEASE_INFO["Other_Non_Skin"]
             label = f"{info['emoji']} Not a Skin Image — Please upload a photo of skin"
