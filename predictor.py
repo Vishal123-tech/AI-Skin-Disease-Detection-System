@@ -15,6 +15,8 @@ import base64
 import json
 import os
 import re
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -477,6 +479,8 @@ class SkinPredictor:
         image_size: tuple[int, int] = (224, 224),
         min_confidence: float = 0.55,
         gemini_api_key: Optional[str] = None,
+        ollama_model: Optional[str] = None,
+        ollama_url: str = "http://127.0.0.1:11434",
     ) -> None:
         self.model_path = Path(model_path)
         self.labels_path = Path(labels_path)
@@ -490,6 +494,8 @@ class SkinPredictor:
         self.load_error: Optional[str] = None
         self.backend: Optional[str] = None
         self.gemini_model = None
+        self.ollama_model = ollama_model or os.environ.get("OLLAMA_MODEL", "")
+        self.ollama_url = (ollama_url or os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")).rstrip("/")
 
         # Load labels
         if self.labels_path.exists():
@@ -581,7 +587,8 @@ class SkinPredictor:
     # ─────────────────────────────────────────────────────────────────────────
     @property
     def demo_mode(self) -> bool:
-        return self.interpreter is None and self.pt_model is None and self.gemini_model is None
+        return (self.interpreter is None and self.pt_model is None
+                and self.gemini_model is None and not self.ollama_model)
 
     # ─────────────────────────────────────────────────────────────────────────
     def _predict_gemini(self, image_path: str) -> dict:
@@ -703,6 +710,53 @@ RULES:
             "top3": top3,
             "notes": notes,
         }
+
+    def _predict_ollama(self, image_path: str) -> dict:
+        """Use an optional local Ollama vision model as a conservative gate."""
+        with open(image_path, "rb") as fh:
+            image_b64 = base64.b64encode(fh.read()).decode("ascii")
+
+        prompt = (
+            "Classify this image for an educational skin-screening prototype. "
+            "Return ONLY JSON with keys is_skin, category, condition, confidence, notes. "
+            "category must be exactly one of skin_disease, healthy_skin, document, random_object. "
+            "If the image is a page, handwriting, diagram, room, animal, table, fan, or other object, "
+            "set is_skin false and category document or random_object. Never guess a disease for a non-skin image."
+        )
+        payload = json.dumps({
+            "model": self.ollama_model,
+            "stream": False,
+            "format": "json",
+            "messages": [{"role": "user", "content": prompt, "images": [image_b64]}],
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.ollama_url}/api/chat", data=payload,
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=45) as response:
+            outer = json.loads(response.read().decode("utf-8"))
+        text = outer.get("message", {}).get("content", "{}")
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        data = json.loads(match.group()) if match else {}
+
+        is_skin = bool(data.get("is_skin", False))
+        category = str(data.get("category", "random_object"))
+        if not is_skin or category in {"document", "random_object"}:
+            info = DISEASE_INFO["Other_Non_Skin"]
+            return {"label": f"{info['emoji']} Not a Skin Image — Please upload a photo of skin",
+                    "raw_class": "Other_Non_Skin", "confidence": 0.0,
+                    "category": "non_skin", "status": "ollama", "probabilities": {},
+                    "disease_info": info, "top3": [],
+                    "notes": str(data.get("notes", "Ollama rejected this as non-skin."))}
+
+        raw_label = str(data.get("condition", "Normal_Skin"))
+        info = _get_disease_info(raw_label)
+        confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
+        clean = raw_label.replace("_", " ")
+        return {"label": f"{info.get('emoji', '🩺')} {clean}", "raw_class": raw_label,
+                "confidence": confidence, "category": info.get("category", "lesion"),
+                "status": "ollama", "probabilities": {}, "disease_info": info,
+                "top3": [], "notes": str(data.get("notes", ""))}
 
     # ─────────────────────────────────────────────────────────────────────────
     def _run_local_model(self, image_path: str) -> np.ndarray:
@@ -860,4 +914,9 @@ RULES:
 
         if self.gemini_model is not None:
             return self._predict_gemini(image_path)
+        if self.ollama_model:
+            try:
+                return self._predict_ollama(image_path)
+            except (OSError, ValueError, KeyError, json.JSONDecodeError, urllib.error.URLError) as exc:
+                self.load_error = f"Ollama unavailable: {exc}"
         return self._predict_local(image_path)

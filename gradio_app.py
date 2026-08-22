@@ -12,12 +12,13 @@ from pathlib import Path
 
 import gradio as gr
 
-from config import GEMINI_API_KEY, LABELS_PATH, MODEL_PATH, REPORT_DIR, UPLOAD_DIR
+from config import GEMINI_API_KEY, LABELS_PATH, MODEL_PATH, OLLAMA_MODEL, OLLAMA_URL, REPORT_DIR, UPLOAD_DIR
 from predictor import DISEASE_INFO, SkinPredictor
 from quality import check_image
 from report import create_report
 
-predictor = SkinPredictor(MODEL_PATH, LABELS_PATH, gemini_api_key=GEMINI_API_KEY)
+predictor = SkinPredictor(MODEL_PATH, LABELS_PATH, gemini_api_key=GEMINI_API_KEY,
+                          ollama_model=OLLAMA_MODEL, ollama_url=OLLAMA_URL)
 PORT = int(os.environ.get("PORT", 7860))
 
 # ── Category colour mapping for display ───────────────────────────────────────

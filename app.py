@@ -14,14 +14,15 @@ from pathlib import Path
 from flask import Flask, request, render_template_string, send_from_directory
 from werkzeug.utils import secure_filename
 
-from config import GEMINI_API_KEY, LABELS_PATH, MAX_UPLOAD_MB, MODEL_PATH, REPORT_DIR, UPLOAD_DIR
+from config import GEMINI_API_KEY, LABELS_PATH, MAX_UPLOAD_MB, MODEL_PATH, OLLAMA_MODEL, OLLAMA_URL, REPORT_DIR, UPLOAD_DIR
 from predictor import SkinPredictor
 from quality import check_image
 from report import create_report
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
-predictor = SkinPredictor(MODEL_PATH, LABELS_PATH, gemini_api_key=GEMINI_API_KEY)
+predictor = SkinPredictor(MODEL_PATH, LABELS_PATH, gemini_api_key=GEMINI_API_KEY,
+                          ollama_model=OLLAMA_MODEL, ollama_url=OLLAMA_URL)
 
 # ─── HTML Template ─────────────────────────────────────────────────────────────
 HTML = """<!doctype html>

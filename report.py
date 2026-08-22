@@ -18,7 +18,7 @@ def create_report(image_path: Path, result: dict, quality, output_path: Path) ->
     
     label = result.get('label', 'Unknown')
     conf_val = result.get('confidence', 0.0)
-    conf_str = f"{conf_val:.1%}" if isinstance(conf_val, float) and result.get('status') == 'model' else "Unavailable (demo mode)"
+    conf_str = f"{conf_val:.1%}" if isinstance(conf_val, (int, float)) and result.get('status') in ('model', 'ollama', 'gemini') else "Unavailable (demo mode)"
 
     story.append(Paragraph(f"Classification Result: <b>{label}</b>", styles["Heading2"]))
     story.append(Paragraph(f"Confidence Level: {conf_str}", styles["Normal"]))

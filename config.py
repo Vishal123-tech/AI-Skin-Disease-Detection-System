@@ -22,5 +22,10 @@ MAX_UPLOAD_MB = 10
 # When set, enables 30+ disease detection and non-skin image rejection
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
+# Optional local Ollama vision model, for example qwen2.5vl:3b.
+# Leave empty to keep the existing TFLite/PyTorch backend.
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "")
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
+
 for folder in (MODEL_PATH.parent, UPLOAD_DIR, REPORT_DIR):
     folder.mkdir(parents=True, exist_ok=True)
