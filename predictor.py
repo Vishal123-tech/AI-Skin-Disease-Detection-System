@@ -410,10 +410,28 @@ def skin_gate_hsv(image_path: str, min_skin_ratio: float = 0.10) -> tuple[bool, 
         cv2.inRange(hsv, lower2, upper2),
     )
 
+    # Remove isolated pixels. A few skin-coloured pixels in a table, wall, or
+    # piece of furniture should not be enough to make the image look like skin.
+    kernel = np.ones((5, 5), dtype=np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
     total = img.shape[0] * img.shape[1]
     skin_px = int(cv2.countNonZero(mask))
     ratio = skin_px / total
-    return ratio >= min_skin_ratio, ratio
+
+    # Require at least one reasonably sized connected region. This is an
+    # out-of-distribution safeguard, not a medical segmentation algorithm.
+    num_labels, _, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+    largest_ratio = 0.0
+    if num_labels > 1:
+        largest_area = int(np.max(stats[1:, cv2.CC_STAT_AREA]))
+        largest_ratio = largest_area / total
+
+    # The ratio threshold remains the primary test; the component test avoids
+    # accepting scattered colour noise from non-skin images.
+    is_skin = ratio >= min_skin_ratio and largest_ratio >= 0.02
+    return is_skin, ratio
 
 
 # ─── Main Predictor ───────────────────────────────────────────────────────────
