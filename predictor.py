@@ -434,6 +434,29 @@ def skin_gate_hsv(image_path: str, min_skin_ratio: float = 0.10) -> tuple[bool, 
     return is_skin, ratio
 
 
+def looks_like_document(image_path: str) -> bool:
+    """Reject common page/screenshot inputs before disease classification.
+
+    This is deliberately conservative: it targets bright page-like images with
+    dense writing/diagram edges, not a general-purpose object detector.
+    """
+    img = cv2.imread(image_path)
+    if img is None:
+        return False
+
+    img = cv2.resize(img, (256, 256))
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+    bright_ratio = float(np.mean(gray > 205))
+    edge_ratio = float(np.mean(cv2.Canny(gray, 60, 140) > 0))
+    low_saturation_ratio = float(np.mean(hsv[:, :, 1] < 65))
+
+    # A photographed/scan-like page normally has a large bright, low-
+    # saturation area plus many high-contrast writing or diagram edges.
+    return bright_ratio > 0.45 and low_saturation_ratio > 0.45 and edge_ratio > 0.045
+
+
 # ─── Main Predictor ───────────────────────────────────────────────────────────
 
 class SkinPredictor:
@@ -720,6 +743,7 @@ RULES:
 
         # ── Gate 1: HSV skin color check ─────────────────────────────────────
         is_skin_color, skin_ratio = skin_gate_hsv(image_path)
+        document_like = looks_like_document(image_path)
 
         # ── Run model ─────────────────────────────────────────────────────────
         probs = self._run_local_model(image_path)
@@ -751,7 +775,12 @@ RULES:
         # never allow the classifier to force a disease label onto an object.
         # The HSV gate is intentionally conservative so darker skin tones are
         # not rejected solely by this heuristic.
-        if skin_ratio < 0.05:
+        if document_like:
+            category = "non_skin"
+            info = DISEASE_INFO["Other_Non_Skin"]
+            label = f"{info['emoji']} Not a Skin Image — Please upload a photo of skin"
+
+        elif skin_ratio < 0.05:
             category = "non_skin"
             info = DISEASE_INFO["Other_Non_Skin"]
             label = f"{info['emoji']} Not a Skin Image — Please upload a photo of skin"
