@@ -2,15 +2,46 @@ import argparse
 from pathlib import Path
 import sys
 
+# 30+ class taxonomy — covers HAM10000/ISIC dermoscopy + common everyday conditions
+# IMPORTANT: Adding "Other_Non_Skin" teaches the model to REJECT random/non-skin images.
+# For best results, the Other_Non_Skin folder should contain ≥500 diverse non-skin images
+# (objects, food, animals, furniture, outdoor scenes, etc.)
 DEFAULT_CLASSES = [
+    # ── ISIC / HAM10000 dermoscopy classes ──────────────────────────────────
     "Actinic Keratoses",
     "Basal Cell Carcinoma",
     "Benign Keratosis like Lesions",
     "Dermatofibroma",
     "Melanocytic Nevi",
+    "Melanoma",
+    "Squamous Cell Carcinoma",
     "Vascular Lesions",
+    # ── Common everyday skin conditions ─────────────────────────────────────
+    "Acne Vulgaris",
+    "Athlete's Foot",
+    "Cellulitis",
+    "Chickenpox",
+    "Cold Sores",
+    "Contact Dermatitis",
+    "Eczema",
+    "Folliculitis",
+    "Impetigo",
+    "Lupus Rash",
+    "Molluscum Contagiosum",
+    "Psoriasis",
+    "Ringworm",
+    "Rosacea",
+    "Scabies",
+    "Seborrheic Dermatitis",
+    "Shingles",
+    "Sunburn",
+    "Tinea Versicolor",
+    "Urticaria",
+    "Vitiligo",
+    "Warts",
+    # ── Normal / Rejection classes ───────────────────────────────────────────
     "Normal_Skin",
-    "Other_Non_Skin"
+    "Other_Non_Skin",   # ← random images: tables, fans, food, etc. → REJECTED
 ]
 
 def train_pytorch(train_dir: Path, val_dir: Path, output_path: Path, labels_path: Path, epochs: int, batch_size: int):
