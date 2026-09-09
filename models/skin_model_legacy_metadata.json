@@ -1,0 +1,9 @@
+{
+  "source": "https://huggingface.co/syaha/skin_cancer_detection_model",
+  "architecture": "Keras CNN converted to TensorFlow Lite",
+  "input_size": [224, 224],
+  "input_preprocessing": "raw_0_255",
+  "embedded_preprocessing": "Rescaling(1/255)",
+  "classes": 7,
+  "scope": "HAM10000 dermoscopic skin-lesion baseline; not a general skin-disease or medical-diagnosis model"
+}

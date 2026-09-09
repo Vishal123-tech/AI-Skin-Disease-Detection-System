@@ -14,15 +14,34 @@ from pathlib import Path
 from flask import Flask, request, render_template_string, send_from_directory
 from werkzeug.utils import secure_filename
 
-from config import GEMINI_API_KEY, LABELS_PATH, MAX_UPLOAD_MB, MODEL_PATH, OLLAMA_MODEL, OLLAMA_URL, REPORT_DIR, UPLOAD_DIR
+from config import (
+    ACNE_LABELS_PATH,
+    ACNE_MODEL_PATH,
+    GATE_LABELS_PATH,
+    GATE_MODEL_PATH,
+    GEMINI_API_KEY,
+    LABELS_PATH,
+    MAX_UPLOAD_MB,
+    MODEL_PATH,
+    REPORT_DIR,
+    UPLOAD_DIR,
+)
 from predictor import SkinPredictor
 from quality import check_image
 from report import create_report
+from feedback import record_feedback, trigger_self_training, get_feedback_summary
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
-predictor = SkinPredictor(MODEL_PATH, LABELS_PATH, gemini_api_key=GEMINI_API_KEY,
-                          ollama_model=OLLAMA_MODEL, ollama_url=OLLAMA_URL)
+predictor = SkinPredictor(
+    MODEL_PATH,
+    LABELS_PATH,
+    acne_model_path=ACNE_MODEL_PATH,
+    acne_labels_path=ACNE_LABELS_PATH,
+    gate_model_path=GATE_MODEL_PATH,
+    gate_labels_path=GATE_LABELS_PATH,
+    gemini_api_key=GEMINI_API_KEY,
+)
 
 # ─── HTML Template ─────────────────────────────────────────────────────────────
 HTML = """<!doctype html>
@@ -242,6 +261,7 @@ def api_predict():
         "disease_description": disease_info.get("description", ""),
         "severity": disease_info.get("severity", ""),
         "top3": top3,
+        "model_used": result.get("model_used", ""),
         "notes": result.get("notes", ""),
         "quality": quality.message,
         "quality_ok": quality.ok,
@@ -253,6 +273,45 @@ def api_predict():
 @app.route("/reports/<path:name>")
 def reports(name):
     return send_from_directory(REPORT_DIR, name, as_attachment=True)
+
+
+@app.route("/api/feedback", methods=["POST"])
+def api_feedback():
+    data = request.get_json(silent=True) or request.form
+    image_path = data.get("image_path")
+    rating = data.get("rating", "Correct")
+    correct_label = data.get("correct_label", "")
+    comment = data.get("comment", "")
+    consent = bool(data.get("consent", True))
+    result = {
+        "raw_class": data.get("predicted_label", ""),
+        "category": data.get("predicted_category", ""),
+        "confidence": data.get("confidence"),
+    }
+    if not image_path or not Path(image_path).exists():
+        return {"error": "Image file not found"}, 400
+    try:
+        msg = record_feedback(image_path, result, rating, correct_label, comment, consent)
+        return {"status": "success", "message": msg}
+    except Exception as exc:
+        return {"error": str(exc)}, 400
+
+
+@app.route("/api/selftrain", methods=["POST", "GET"])
+def api_selftrain():
+    try:
+        epochs = int(request.args.get("epochs", 5))
+        res = trigger_self_training(epochs=epochs, min_samples=1)
+        if res.get("success"):
+            predictor.reload_models()
+        return res
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}, 500
+
+
+@app.route("/api/stats", methods=["GET"])
+def api_stats():
+    return get_feedback_summary()
 
 
 if __name__ == "__main__":

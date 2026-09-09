@@ -1,0 +1,15 @@
+{
+  "source": "Continuous Self-Training from User Feedback",
+  "architecture": "MobileNetV2 fine-tuned",
+  "last_trained": "2026-09-09T13:46:12.732322+00:00",
+  "classes": [
+    "Acne Vulgaris",
+    "Eczema",
+    "Fungal Infection",
+    "Psoriasis"
+  ],
+  "feedback_samples_used": 1,
+  "replay_samples_used": 0,
+  "validation_accuracy": 1.0,
+  "backup_path": "C:\\Users\\vy355\\Documents\\Codex\\2026-08-19\\8-ai-skin-disease-detection-hardware\\models\\backups\\skin_model_20260909_191612.pt"
+}

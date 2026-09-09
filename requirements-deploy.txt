@@ -2,3 +2,6 @@
 tensorflow>=2.15
 gunicorn>=22.0
 gradio>=4.0
+torch>=2.0
+torchvision>=0.15
+google-generativeai>=0.5

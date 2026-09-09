@@ -5,3 +5,8 @@ services:
     buildCommand: pip install -r requirements-deploy.txt
     startCommand: python gradio_app.py
     healthCheckPath: /
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PORT
+        value: 7860

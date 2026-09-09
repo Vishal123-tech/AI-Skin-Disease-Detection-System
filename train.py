@@ -139,6 +139,25 @@ def train_tensorflow(train_dir: Path, val_dir: Path, output_path: Path, labels_p
     class_names = train_ds.class_names
     print(f"Detected {len(class_names)} classes: {class_names}")
 
+    # Compensate for uneven folder sizes (for example, the skin-gate dataset
+    # contains many more non-skin images than skin images). Without class
+    # weights, the model can achieve high accuracy by mostly predicting the
+    # majority class while missing skin images.
+    class_counts = {}
+    for class_index, class_name in enumerate(class_names):
+        class_dir = Path(train_dir) / class_name
+        class_counts[class_index] = sum(
+            1 for p in class_dir.rglob("*")
+            if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
+        )
+    total_images = sum(class_counts.values())
+    class_weights = {
+        class_index: total_images / (len(class_names) * max(count, 1))
+        for class_index, count in class_counts.items()
+    }
+    print(f"Training image counts: {class_counts}")
+    print(f"Using class weights: {class_weights}")
+
     labels_path.parent.mkdir(parents=True, exist_ok=True)
     labels_path.write_text("\n".join(class_names), encoding="utf-8")
     print(f"Saved labels to: {labels_path}")
@@ -160,14 +179,19 @@ def train_tensorflow(train_dir: Path, val_dir: Path, output_path: Path, labels_p
 
     model = tf.keras.Model(inputs, outputs)
     model.compile(optimizer=tf.keras.optimizers.Adam(1e-3), loss="categorical_crossentropy", metrics=["accuracy"])
-    model.fit(train_ds, validation_data=val_ds, epochs=epochs)
+    model.fit(train_ds, validation_data=val_ds, epochs=epochs, class_weight=class_weights)
 
     if fine_tune_epochs > 0:
         base.trainable = True
         for layer in base.layers[:-30]:
             layer.trainable = False
         model.compile(optimizer=tf.keras.optimizers.Adam(1e-5), loss="categorical_crossentropy", metrics=["accuracy"])
-        model.fit(train_ds, validation_data=val_ds, epochs=fine_tune_epochs)
+        model.fit(
+            train_ds,
+            validation_data=val_ds,
+            epochs=fine_tune_epochs,
+            class_weight=class_weights,
+        )
 
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     tflite_bytes = converter.convert()

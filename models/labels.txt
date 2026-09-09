@@ -1,8 +1,4 @@
-Actinic Keratoses
-Basal Cell Carcinoma
-Benign Keratosis like Lesions
-Dermatofibroma
-Melanocytic Nevi
-Normal_Skin
-Other_Non_Skin
-Vascular Lesions
+Acne Vulgaris
+Eczema
+Fungal Infection
+Psoriasis

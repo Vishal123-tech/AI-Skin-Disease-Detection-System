@@ -1,10 +1,4 @@
-"""
-gradio_app.py — AI Skin Disease Detection (Gradio UI)
-──────────────────────────────────────────────────────
-Supports:
-  • Gemini Vision API backend  (30+ diseases, non-skin rejection)
-  • Local TFLite / PyTorch      (8 original classes, entropy gate)
-"""
+"""Simple Gradio UI for the AI Skin Disease Detection prototype."""
 
 import os
 from datetime import datetime
@@ -12,243 +6,231 @@ from pathlib import Path
 
 import gradio as gr
 
-from config import GEMINI_API_KEY, LABELS_PATH, MODEL_PATH, OLLAMA_MODEL, OLLAMA_URL, REPORT_DIR, UPLOAD_DIR
-from predictor import DISEASE_INFO, SkinPredictor
+from config import (
+    ACNE_LABELS_PATH,
+    ACNE_MODEL_PATH,
+    GATE_LABELS_PATH,
+    GATE_MODEL_PATH,
+    GEMINI_API_KEY,
+    LABELS_PATH,
+    MODEL_PATH,
+    REPORT_DIR,
+)
+from predictor import SkinPredictor
 from quality import check_image
 from report import create_report
+from feedback import (
+    available_feedback_labels,
+    get_feedback_summary,
+    record_feedback,
+    trigger_self_training,
+)
 
-predictor = SkinPredictor(MODEL_PATH, LABELS_PATH, gemini_api_key=GEMINI_API_KEY,
-                          ollama_model=OLLAMA_MODEL, ollama_url=OLLAMA_URL)
+
+predictor = SkinPredictor(
+    MODEL_PATH,
+    LABELS_PATH,
+    acne_model_path=ACNE_MODEL_PATH,
+    acne_labels_path=ACNE_LABELS_PATH,
+    gate_model_path=GATE_MODEL_PATH,
+    gate_labels_path=GATE_LABELS_PATH,
+    gemini_api_key=GEMINI_API_KEY,
+)
 PORT = int(os.environ.get("PORT", 7860))
-
-# ── Category colour mapping for display ───────────────────────────────────────
-CATEGORY_STYLES = {
-    "lesion":   ("🔴", "Potential Skin Condition Detected"),
-    "normal":   ("🟢", "Normal Healthy Skin"),
-    "non_skin": ("🟠", "Not a Skin Image"),
-    "uncertain":("🟡", "Uncertain — Please Try Again"),
-    "demo":     ("⚪", "Demo Mode"),
-}
-
-
-def _format_top3(top3: list) -> str:
-    """Format the top-3 predictions as a markdown table."""
-    if not top3:
-        return ""
-    rows = ["| # | Condition | Confidence |", "|---|-----------|-----------|"]
-    for i, (cond, conf) in enumerate(top3[:3], 1):
-        info = DISEASE_INFO.get(cond, {})
-        emoji = info.get("emoji", "🩺")
-        bar_filled = round(conf * 10)
-        bar = "█" * bar_filled + "░" * (10 - bar_filled)
-        rows.append(f"| {i} | {emoji} {cond.replace('_',' ')} | `{bar}` {conf:.1%} |")
-    return "\n".join(rows)
 
 
 def analyze(image_path):
     if not image_path:
-        return (
-            "### ⬆️ Please upload a skin image to begin analysis.",
-            None,
-        )
+        return "Please upload a skin image.", None, None, gr.update(visible=False)
 
     image_path = Path(image_path)
     quality = check_image(str(image_path))
     result = predictor.predict(str(image_path))
 
-    # Save a copy to uploads
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    saved = UPLOAD_DIR / f"{stamp}_{image_path.name}"
-    try:
-        import shutil
-        shutil.copy2(image_path, saved)
-    except Exception:
-        saved = image_path
-
-    # Generate PDF report
     report_path = REPORT_DIR / f"{stamp}_report.pdf"
-    create_report(saved, result, quality, report_path)
+    create_report(image_path, result, quality, report_path)
 
-    # ── Build output markdown ─────────────────────────────────────────────────
+    confidence = (
+        f"{result['confidence']:.1%}"
+        if result["status"] != "demo"
+        else "Unavailable"
+    )
     category = result.get("category", "lesion")
-    icon, header_text = CATEGORY_STYLES.get(category, ("🩺", "Analysis Result"))
+    top_suggestion = ""
+    if category == "uncertain" and result.get("top3"):
+        top_condition, top_probability = result["top3"][0]
+        top_suggestion = (
+            f"\n**Top possible condition (not confirmed):** "
+            f"{top_condition} ({top_probability:.1%})"
+        )
 
-    confidence = result["confidence"]
-    conf_str = f"{confidence:.1%}" if result["status"] != "demo" else "Unavailable (demo mode)"
-
-    disease_info = result.get("disease_info", {})
-    description = disease_info.get("description", "")
-    severity = disease_info.get("severity", "")
-
-    top3_md = _format_top3(result.get("top3", []))
-    notes = result.get("notes", "")
-    quality_notice = "" if quality.ok else f"\n> ⚠️ **Quality Warning:** {quality.message}\n"
-
-    backend_badge = f"`{result['status'].upper()}`"
-
-    # ── Non-skin rejection ────────────────────────────────────────────────────
-    if category == "non_skin":
-        text = f"""## {icon} {header_text}
-
-**This image does not appear to contain human skin.**
-
-The system detected no skin-tone pixels or the AI identified the image as a non-medical photo (e.g. object, animal, food, scenery).
-
-### What to do:
-- 📸 Take a clear, close-up photo of the **skin area** you want analyzed
-- 💡 Ensure good lighting (no harsh shadows)
-- 🎯 Make sure the skin fills most of the frame
-{quality_notice}
-> **Disclaimer:** Educational prototype only. Not a medical diagnostic device."""
-        return text, str(report_path)
-
-    # ── Uncertain ─────────────────────────────────────────────────────────────
-    if category == "uncertain":
-        text = f"""## {icon} {header_text}
-
-**Confidence is too low to make a reliable prediction ({conf_str}).**
-
-{description}
-
-### Tips for better results:
-- 📸 Move the camera closer to the skin area
-- 💡 Use bright, even, indirect lighting
-- 🙆 Keep the camera steady (avoid blur)
-- 🔍 Ensure the skin lesion/area is clearly visible and centered
-{quality_notice}
-> **Disclaimer:** Educational prototype only. Not a medical diagnostic device."""
-        return text, str(report_path)
-
-    # ── Normal skin ───────────────────────────────────────────────────────────
     if category == "normal":
-        text = f"""## {icon} {header_text}
+        category_header = "🟢 **Classification:** Normal Healthy Skin"
+    elif category == "non_skin":
+        category_header = "🟠 **Classification:** Not a Skin Image"
+    elif category == "uncertain":
+        category_header = "🟠 **Classification:** Uncertain Input"
+    elif category == "non_acne":
+        category_header = "🟢 **Classification:** No Strong Acne Pattern"
+    elif category == "lesion":
+        category_header = "🔴 **Classification:** Potential Skin Lesion Detected"
+    else:
+        category_header = "ℹ️ **Classification:** Demo Mode"
 
-**Result:** {result["label"]}  
-**Confidence:** {conf_str} | **Backend:** {backend_badge}
+    quality_notice = "" if quality.ok else f"\n\n> ⚠️ **Quality Warning:** {quality.message}"
 
-{description}
+    text = f"""### {category_header}
 
----
-### 📊 Image Quality
-| Metric | Value |
-|--------|-------|
-| Quality | {quality.message} |
-| Blur Score | {quality.blur_score:.1f} |
-| Brightness | {quality.brightness:.1f} |
-{quality_notice}
-> **Disclaimer:** Educational prototype only. Not a medical diagnostic device. Consult a dermatologist for any skin concerns."""
-        return text, str(report_path)
-
-    # ── Skin lesion / disease ─────────────────────────────────────────────────
-    severity_icon = "🚨" if "CRITICAL" in severity or "High" in severity else ("⚠️" if "Moderate" in severity else "ℹ️")
-
-    text = f"""## {icon} {header_text}
-
-**Detected:** {result["label"]}  
-**Confidence:** {conf_str} | **Backend:** {backend_badge}
+**Result:** {result['label']}
+**Confidence:** {confidence}{top_suggestion}
 
 ---
-### 📋 About This Condition
-{description}
+**Image Quality Metrics:**
+- **Quality Status:** {quality.message}
+- **Blur Score:** {quality.blur_score:.1f}
+- **Brightness:** {quality.brightness:.1f}{quality_notice}
 
-{severity_icon} **Severity / Action:** {severity}
-
-"""
-
-    if top3_md:
-        text += f"""---
-### 📊 Top Predictions
-{top3_md}
-
-"""
-
-    if notes:
-        text += f"""---
-### 🔬 AI Observation
-> {notes}
-
-"""
-
-    text += f"""---
-### 📸 Image Quality
-| Metric | Value |
-|--------|-------|
-| Quality | {quality.message} |
-| Blur Score | {quality.blur_score:.1f} |
-| Brightness | {quality.brightness:.1f} |
-{quality_notice}
----
-> **⚕️ Disclaimer:** This is an **educational AI screening prototype** — not a medical diagnostic device. Always consult a qualified dermatologist or healthcare professional for diagnosis and treatment."""
-
-    return text, str(report_path)
+> **Disclaimer:** Educational screening prototype only. This result is not a medical diagnosis. Consult a qualified healthcare professional or dermatologist."""
+    feedback_context = {"image_path": str(image_path), "result": result}
+    return text, str(report_path), feedback_context, gr.update(visible=True)
 
 
-# ─── Gradio Interface ─────────────────────────────────────────────────────────
+def submit_feedback(feedback_context, rating, correct_label, comment, consent):
+    if not feedback_context:
+        return "Please analyze an image before sending feedback."
+    try:
+        return record_feedback(
+            feedback_context["image_path"],
+            feedback_context["result"],
+            rating,
+            correct_label,
+            comment,
+            consent,
+        )
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        return f"⚠️ Feedback was not saved: {exc}"
 
-backend_label = (
-    "🤖 Backend: Gemini Vision API (30+ diseases)"
-    if predictor.backend == "gemini"
-    else f"🤖 Backend: Local Model ({len(predictor.labels)} classes)"
-    if predictor.backend
-    else "⚠️ Demo Mode (no model loaded)"
-)
 
-with gr.Blocks(
-    title="AI Skin Disease Detection",
-    theme=gr.themes.Soft(primary_hue="blue", neutral_hue="slate"),
-    css="""
-    .output-markdown { font-size: 15px; line-height: 1.7; }
-    .status-bar { background: #1e293b; color: #94a3b8; padding: 8px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
-    """,
-) as demo:
-    gr.Markdown("""# 🩺 AI Skin Disease Detection
-    Upload a photo of **skin** to get an AI-powered screening result with disease information, severity assessment, and a downloadable PDF report.""")
-
-    gr.HTML(f'<div class="status-bar">{backend_label}</div>')
-
-    gr.Markdown("> ⚕️ **Important:** This is an educational prototype — **not a medical diagnostic device.** Always consult a qualified dermatologist.")
-
-    with gr.Row():
-        with gr.Column(scale=1):
-            image_input = gr.Image(
-                type="filepath",
-                label="📷 Upload Skin Image",
-                height=320,
-            )
-            analyze_btn = gr.Button("🔍 Analyze Image", variant="primary", size="lg")
-
-            gr.Markdown("""**📌 Tips for best results:**
-- Photo should show **skin clearly** (not objects, food, animals)
-- Good lighting — avoid harsh shadows or glare
-- Close-up of the affected area
-- Steady camera (avoid blur)""")
-
-        with gr.Column(scale=2):
-            result_md = gr.Markdown(
-                "### ⬆️ Upload a skin image and click **Analyze Image** to begin.",
-                elem_classes=["output-markdown"],
-            )
-            report_file = gr.File(label="📄 Download PDF Report")
-
-    analyze_btn.click(
-        fn=analyze,
-        inputs=image_input,
-        outputs=[result_md, report_file],
+def refresh_stats_ui() -> str:
+    stats = get_feedback_summary()
+    return (
+        f"**Feedback Collected:** {stats['total_feedback']} items "
+        f"({stats['correct_count']} verified, {stats['wrong_count']} corrected) | "
+        f"**Pending Retraining:** {stats['unlearned_count']} | "
+        f"**Last Model Update:** `{stats['last_trained']}`"
     )
 
-    gr.Markdown("""---
-### 🔬 Detectable Conditions
-The system can identify **30+ skin conditions** including:
 
-| Category | Conditions |
-|----------|-----------|
-| **Skin Cancer** | Melanoma, Basal Cell Carcinoma, Squamous Cell Carcinoma, Actinic Keratoses |
-| **Common Infections** | Ringworm, Impetigo, Cellulitis, Chickenpox, Shingles, Warts, Scabies |
-| **Inflammatory** | Eczema, Psoriasis, Contact Dermatitis, Rosacea, Urticaria (Hives) |
-| **Acne & Follicular** | Acne Vulgaris (Pimples), Folliculitis, Seborrheic Dermatitis |
-| **Pigmentation** | Vitiligo, Melanocytic Nevi (Moles), Tinea Versicolor |
-| **Other** | Dermatofibroma, Vascular Lesions, Cold Sores, Sunburn, Molluscum Contagiosum |
-| **Non-Skin** | Random images, objects, animals — **automatically rejected** ✅ |""")
+def run_self_training_ui() -> str:
+    try:
+        res = trigger_self_training(epochs=5, min_samples=1)
+        if res.get("success"):
+            predictor.reload_models()
+            classes_str = ", ".join(res.get("classes", []))
+            return (
+                f"### 🚀 Self-Training Completed Successfully!\n\n"
+                f"- **Summary:** {res.get('message')}\n"
+                f"- **Supported Classes ({len(res.get('classes', []))}):** {classes_str}\n"
+                f"- **Validation Accuracy:** {res.get('val_accuracy', 0):.1%}\n"
+                f"- **Active Model Engine:** `{predictor.backend}`\n"
+                f"- **Backup Saved:** `{res.get('backup_path') or 'Created in models/backups/'}`\n\n"
+                f"> **Live Update:** The updated model weights were hot-reloaded into memory."
+            )
+        else:
+            return f"⚠️ **Could not train:** {res.get('message')}"
+    except Exception as exc:
+        return f"❌ **Error during self-training:** {exc}"
+
+
+with gr.Blocks(title="AI Skin Disease Detection") as demo:
+    gr.Markdown(
+        "# 🩺 AI Skin Disease Detection\n"
+        "Upload a skin image to run the classifier (detecting normal skin, "
+        "non-skin images, or skin lesions) and generate a PDF report."
+    )
+    gr.Markdown(
+        "> **Important:** This is an educational prototype, not a medical diagnostic device."
+    )
+    with gr.Row():
+        image = gr.Image(type="filepath", label="Upload skin image")
+        result = gr.Markdown("Your result will appear here.")
+    analyze_button = gr.Button("Analyze Image", variant="primary")
+    report_file = gr.File(label="Download PDF report")
+    feedback_context = gr.State(None)
+    with gr.Group(visible=False) as feedback_group:
+        gr.Markdown(
+            "### Help improve this prototype\n"
+            "Was the result correct? Your feedback is saved for continuous learning; "
+            "the model adapts safely using experience replay to prevent forgetting."
+        )
+        feedback_rating = gr.Radio(
+            ["Correct", "Wrong", "Not sure"],
+            label="Prediction feedback",
+            value="Correct",
+        )
+        correction_label = gr.Dropdown(
+            choices=available_feedback_labels(),
+            label="What is the correct condition?",
+            visible=False,
+        )
+        feedback_comment = gr.Textbox(
+            label="Optional note",
+            placeholder="Example: dermatologist-confirmed acne; leave blank if unsure.",
+            lines=2,
+        )
+        feedback_consent = gr.Checkbox(
+            label="I consent to storing this image for supervised model improvement.",
+            value=False,
+        )
+        feedback_button = gr.Button("Save Feedback")
+        feedback_status = gr.Markdown()
+
+    with gr.Accordion("🧠 Continuous Self-Training (Learn from Feedback)", open=True):
+        gr.Markdown(
+            "Fine-tune and adapt the AI model on confirmed user feedback. "
+            "The engine combines feedback images with baseline references (experience replay) "
+            "to prevent catastrophic forgetting, trains with PyTorch, and hot-reloads into memory."
+        )
+        stats_md = gr.Markdown(value=refresh_stats_ui)
+        with gr.Row():
+            train_btn = gr.Button("⚡ Retrain Model on Feedback Now", variant="primary")
+            refresh_btn = gr.Button("🔄 Refresh Feedback Stats")
+        train_status = gr.Markdown()
+
+    analyze_button.click(
+        analyze,
+        inputs=image,
+        outputs=[result, report_file, feedback_context, feedback_group],
+    )
+    feedback_rating.change(
+        lambda rating: gr.update(visible=rating == "Wrong"),
+        inputs=feedback_rating,
+        outputs=correction_label,
+    )
+    feedback_button.click(
+        submit_feedback,
+        inputs=[feedback_context, feedback_rating, correction_label, feedback_comment, feedback_consent],
+        outputs=feedback_status,
+    ).then(refresh_stats_ui, outputs=stats_md)
+
+    train_btn.click(
+        run_self_training_ui,
+        outputs=train_status,
+    ).then(refresh_stats_ui, outputs=stats_md)
+    refresh_btn.click(refresh_stats_ui, outputs=stats_md)
+
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=PORT, share=False)
+    # On cloud platforms (Render, HF Spaces), the platform provides the public URL.
+    # Only enable share=True locally.
+    is_cloud = bool(os.environ.get("RENDER") or os.environ.get("SPACE_ID"))
+    _, local_url, share_url = demo.launch(
+        server_name="0.0.0.0",
+        server_port=PORT,
+        share=(not is_cloud),
+    )
+    print(f"LOCAL_URL={local_url}", flush=True)
+    print(f"PUBLIC_SHARE_URL={share_url}", flush=True)
+    if share_url:
+        Path("public_url.txt").write_text(share_url, encoding="utf-8")

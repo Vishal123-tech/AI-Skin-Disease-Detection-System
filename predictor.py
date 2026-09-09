@@ -15,10 +15,8 @@ import base64
 import json
 import os
 import re
-import urllib.error
-import urllib.request
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import cv2
 import numpy as np
@@ -476,32 +474,108 @@ class SkinPredictor:
         self,
         model_path: Path,
         labels_path: Path,
+        acne_model_path: Optional[Path] = None,
+        acne_labels_path: Optional[Path] = None,
+        gate_model_path: Optional[Path] = None,
+        gate_labels_path: Optional[Path] = None,
         image_size: tuple[int, int] = (224, 224),
         min_confidence: float = 0.55,
         gemini_api_key: Optional[str] = None,
-        ollama_model: Optional[str] = None,
-        ollama_url: str = "http://127.0.0.1:11434",
     ) -> None:
         self.model_path = Path(model_path)
         self.labels_path = Path(labels_path)
+        self.acne_model_path = Path(acne_model_path) if acne_model_path else self.model_path.with_name("acne_model.tflite")
+        self.acne_labels_path = Path(acne_labels_path) if acne_labels_path else self.model_path.with_name("acne_labels.txt")
+        self.acne_interpreter = None
+        self.acne_labels: list[str] = []
+        self.acne_image_size = image_size
+        self.acne_preprocess_mode = "minus_one_to_one"
+        # Opt in only after an acne model has been trained and independently
+        # tested. Keeping this false by default preserves the existing model
+        # behavior for users who have not supplied the focused model yet.
+        self.acne_focus = str(os.environ.get("ACNE_FOCUS_MODE", "0")).lower() in {
+            "1", "true", "yes", "on"
+        }
+        self.acne_priority = str(os.environ.get("ACNE_PRIORITY_MODE", "1")).lower() in {
+            "1", "true", "yes", "on"
+        }
+        # Keep the former dermoscopic model as a second local expert. The
+        # current SCIN model covers common inflammatory/infectious conditions;
+        # the legacy model covers the older lesion taxonomy.
+        self.legacy_model_path = self.model_path.with_name("skin_model_legacy.tflite")
+        self.legacy_labels_path = self.labels_path.with_name("labels_legacy.txt")
+        self.gate_model_path = Path(gate_model_path) if gate_model_path else self.model_path.with_name("skin_gate.tflite")
+        self.gate_labels_path = Path(gate_labels_path) if gate_labels_path else self.model_path.with_name("skin_gate_labels.txt")
         self.image_size = image_size
+        self.legacy_image_size = image_size
         self.min_confidence = min_confidence
         self.interpreter = None
+        self.legacy_interpreter = None
+        self.gate_interpreter = None
         self.pt_model = None
         self.transform = None
         self.device = None
         self.labels: list[str] = []
+        self.legacy_labels: list[str] = []
+        self.gate_labels: list[str] = []
         self.load_error: Optional[str] = None
         self.backend: Optional[str] = None
+        self.legacy_backend: Optional[str] = None
         self.gemini_model = None
-        self.ollama_model = ollama_model or os.environ.get("OLLAMA_MODEL", "")
-        self.ollama_url = (ollama_url or os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")).rstrip("/")
+        # The original bundled model expected pixels in [-1, 1].  The current
+        # HF baseline has an embedded 1/255 rescaling layer, so it expects the
+        # raw 0..255 image range at the TFLite input.  Keep this explicit so a
+        # future model swap cannot silently change predictions.
+        self.preprocess_mode = "minus_one_to_one"
+        metadata_path = self.model_path.with_name("skin_model_metadata.json")
+        if metadata_path.exists():
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                self.preprocess_mode = str(
+                    metadata.get("input_preprocessing", self.preprocess_mode)
+                )
+            except (OSError, ValueError, TypeError) as exc:
+                print(f"Model metadata could not be read: {exc}")
 
         # Load labels
         if self.labels_path.exists():
             self.labels = [
                 x.strip()
                 for x in self.labels_path.read_text(encoding="utf-8").splitlines()
+                if x.strip()
+            ]
+
+        if self.acne_labels_path.exists():
+            self.acne_labels = [
+                x.strip()
+                for x in self.acne_labels_path.read_text(encoding="utf-8").splitlines()
+                if x.strip()
+            ]
+            acne_metadata_path = self.acne_model_path.with_name("acne_model_metadata.json")
+            if acne_metadata_path.exists():
+                try:
+                    acne_metadata = json.loads(
+                        acne_metadata_path.read_text(encoding="utf-8")
+                    )
+                    self.acne_preprocess_mode = str(
+                        acne_metadata.get(
+                            "input_preprocessing", self.acne_preprocess_mode
+                        )
+                    )
+                except (OSError, ValueError, TypeError) as exc:
+                    print(f"Acne model metadata could not be read: {exc}")
+
+        if self.legacy_labels_path.exists():
+            self.legacy_labels = [
+                x.strip()
+                for x in self.legacy_labels_path.read_text(encoding="utf-8").splitlines()
+                if x.strip()
+            ]
+
+        if self.gate_labels_path.exists():
+            self.gate_labels = [
+                x.strip()
+                for x in self.gate_labels_path.read_text(encoding="utf-8").splitlines()
                 if x.strip()
             ]
 
@@ -521,6 +595,9 @@ class SkinPredictor:
         # ── 2. Load local model (fallback) ────────────────────────────────────
         if self.gemini_model is None:
             self._load_local_model()
+            self._load_legacy_model()
+            self._load_gate_model()
+            self._load_acne_model()
 
     # ─────────────────────────────────────────────────────────────────────────
     def _load_local_model(self) -> None:
@@ -578,17 +655,163 @@ class SkinPredictor:
                 shape = self.interpreter.get_input_details()[0]["shape"]
                 if len(shape) == 4:
                     self.image_size = (int(shape[2]), int(shape[1]))
+                output_shape = self.interpreter.get_output_details()[0]["shape"]
+                output_count = int(output_shape[-1]) if len(output_shape) else 0
+                if output_count and len(self.labels) != output_count:
+                    print(
+                        "Model/label mismatch: model returns "
+                        f"{output_count} classes but labels.txt contains {len(self.labels)}."
+                    )
+                    if len(self.labels) > output_count:
+                        self.labels = self.labels[:output_count]
+                    else:
+                        self.labels.extend(
+                            f"Class {i}" for i in range(len(self.labels), output_count)
+                        )
                 print(f"TFLite model loaded ({len(self.labels)} classes, backend={self.backend})")
             except Exception as exc:
                 self.interpreter = None
                 self.load_error = str(exc)
                 print(f"TFLite load failed: {exc}")
 
+    def _load_gate_model(self) -> None:
+        """Load the optional two-class skin/non-skin TFLite gate."""
+        if not self.gate_model_path.exists():
+            return
+
+        try:
+            try:
+                import ai_edge_litert.interpreter as tflite  # type: ignore
+                self.gate_interpreter = tflite.Interpreter(model_path=str(self.gate_model_path))
+            except ImportError:
+                try:
+                    import tflite_runtime.interpreter as tflite  # type: ignore
+                    self.gate_interpreter = tflite.Interpreter(model_path=str(self.gate_model_path))
+                except ImportError:
+                    import tensorflow as tf  # type: ignore
+                    self.gate_interpreter = tf.lite.Interpreter(model_path=str(self.gate_model_path))
+
+            self.gate_interpreter.allocate_tensors()
+            print(f"Skin gate loaded ({len(self.gate_labels)} classes): {self.gate_model_path.name}")
+        except Exception as exc:
+            self.gate_interpreter = None
+            print(f"Skin gate load failed: {exc}")
+
+    def _load_acne_model(self) -> None:
+        """Load the optional focused two-class acne model."""
+        if not self.acne_model_path.exists() or len(self.acne_labels) != 2:
+            return
+
+        try:
+            try:
+                import ai_edge_litert.interpreter as tflite  # type: ignore
+                self.acne_interpreter = tflite.Interpreter(
+                    model_path=str(self.acne_model_path)
+                )
+            except ImportError:
+                try:
+                    import tflite_runtime.interpreter as tflite  # type: ignore
+                    self.acne_interpreter = tflite.Interpreter(
+                        model_path=str(self.acne_model_path)
+                    )
+                except ImportError:
+                    import tensorflow as tf  # type: ignore
+                    self.acne_interpreter = tf.lite.Interpreter(
+                        model_path=str(self.acne_model_path)
+                    )
+
+            self.acne_interpreter.allocate_tensors()
+            input_shape = self.acne_interpreter.get_input_details()[0]["shape"]
+            if len(input_shape) == 4:
+                self.acne_image_size = (int(input_shape[2]), int(input_shape[1]))
+            output_shape = self.acne_interpreter.get_output_details()[0]["shape"]
+            output_count = int(output_shape[-1]) if len(output_shape) else 0
+            if output_count != 2:
+                self.acne_interpreter = None
+                print(
+                    "Acne model ignored: expected two output classes, "
+                    f"found {output_count}."
+                )
+                return
+            print(f"Acne model loaded (2 classes): {self.acne_model_path.name}")
+        except Exception as exc:
+            self.acne_interpreter = None
+            print(f"Acne model load failed: {exc}")
+
+    def _load_legacy_model(self) -> None:
+        """Load the former HAM10000 lesion model when it is bundled locally."""
+        if not self.legacy_model_path.exists() or not self.legacy_labels:
+            return
+
+        try:
+            try:
+                import ai_edge_litert.interpreter as tflite  # type: ignore
+                self.legacy_interpreter = tflite.Interpreter(
+                    model_path=str(self.legacy_model_path)
+                )
+                self.legacy_backend = "litert"
+            except ImportError:
+                try:
+                    import tflite_runtime.interpreter as tflite  # type: ignore
+                    self.legacy_interpreter = tflite.Interpreter(
+                        model_path=str(self.legacy_model_path)
+                    )
+                    self.legacy_backend = "tflite_runtime"
+                except ImportError:
+                    import tensorflow as tf  # type: ignore
+                    self.legacy_interpreter = tf.lite.Interpreter(
+                        model_path=str(self.legacy_model_path)
+                    )
+                    self.legacy_backend = "tensorflow"
+
+            self.legacy_interpreter.allocate_tensors()
+            legacy_shape = self.legacy_interpreter.get_input_details()[0]["shape"]
+            if len(legacy_shape) == 4:
+                self.legacy_image_size = (int(legacy_shape[2]), int(legacy_shape[1]))
+            output_shape = self.legacy_interpreter.get_output_details()[0]["shape"]
+            output_count = int(output_shape[-1]) if len(output_shape) else 0
+            if output_count and len(self.legacy_labels) != output_count:
+                print(
+                    "Legacy model/label mismatch: model returns "
+                    f"{output_count} classes but labels_legacy.txt contains "
+                    f"{len(self.legacy_labels)}."
+                )
+                self.legacy_labels = self.legacy_labels[:output_count]
+            print(
+                f"Legacy TFLite model loaded ({len(self.legacy_labels)} classes, "
+                f"backend={self.legacy_backend})"
+            )
+        except Exception as exc:
+            self.legacy_interpreter = None
+            self.legacy_backend = None
+            print(f"Legacy TFLite load failed: {exc}")
+
+    def reload_models(self) -> None:
+        """Hot-reload local models from disk after self-training/fine-tuning."""
+        if self.labels_path.exists():
+            self.labels = [
+                x.strip()
+                for x in self.labels_path.read_text(encoding="utf-8").splitlines()
+                if x.strip()
+            ]
+        self.pt_model = None
+        self.interpreter = None
+        self._load_local_model()
+        self._load_legacy_model()
+        self._load_gate_model()
+        self._load_acne_model()
+        print(f"SkinPredictor hot-reloaded: backend={self.backend}, classes={len(self.labels)}")
+
     # ─────────────────────────────────────────────────────────────────────────
     @property
     def demo_mode(self) -> bool:
-        return (self.interpreter is None and self.pt_model is None
-                and self.gemini_model is None and not self.ollama_model)
+        return (
+            self.interpreter is None
+            and self.legacy_interpreter is None
+            and self.acne_interpreter is None
+            and self.pt_model is None
+            and self.gemini_model is None
+        )
 
     # ─────────────────────────────────────────────────────────────────────────
     def _predict_gemini(self, image_path: str) -> dict:
@@ -711,109 +934,247 @@ RULES:
             "notes": notes,
         }
 
-    def _predict_ollama(self, image_path: str) -> dict:
-        """Use an optional local Ollama vision model as a conservative gate."""
-        with open(image_path, "rb") as fh:
-            image_b64 = base64.b64encode(fh.read()).decode("ascii")
-
-        prompt = (
-            "Classify this image for an educational skin-screening prototype. "
-            "Return ONLY JSON with keys is_skin, category, condition, confidence, notes. "
-            "category must be exactly one of skin_disease, healthy_skin, document, random_object. "
-            "If the image is a page, handwriting, diagram, room, animal, table, fan, or other object, "
-            "set is_skin false and category document or random_object. Never guess a disease for a non-skin image."
-        )
-        payload = json.dumps({
-            "model": self.ollama_model,
-            "stream": False,
-            "format": "json",
-            "messages": [{"role": "user", "content": prompt, "images": [image_b64]}],
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            f"{self.ollama_url}/api/chat", data=payload,
-            headers={"Content-Type": "application/json"}, method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=45) as response:
-            outer = json.loads(response.read().decode("utf-8"))
-        text = outer.get("message", {}).get("content", "{}")
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        data = json.loads(match.group()) if match else {}
-
-        is_skin = bool(data.get("is_skin", False))
-        category = str(data.get("category", "random_object"))
-        if not is_skin or category in {"document", "random_object"}:
-            info = DISEASE_INFO["Other_Non_Skin"]
-            return {"label": f"{info['emoji']} Not a Skin Image — Please upload a photo of skin",
-                    "raw_class": "Other_Non_Skin", "confidence": 0.0,
-                    "category": "non_skin", "status": "ollama", "probabilities": {},
-                    "disease_info": info, "top3": [],
-                    "notes": str(data.get("notes", "Ollama rejected this as non-skin."))}
-
-        raw_label = str(data.get("condition", "Normal_Skin"))
-        info = _get_disease_info(raw_label)
-        confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
-        clean = raw_label.replace("_", " ")
-        return {"label": f"{info.get('emoji', '🩺')} {clean}", "raw_class": raw_label,
-                "confidence": confidence, "category": info.get("category", "lesion"),
-                "status": "ollama", "probabilities": {}, "disease_info": info,
-                "top3": [], "notes": str(data.get("notes", ""))}
-
     # ─────────────────────────────────────────────────────────────────────────
     def _run_local_model(self, image_path: str) -> np.ndarray:
         """Run the local model and return a probability array."""
-        image = Image.open(image_path).convert("RGB")
-
         if self.backend == "pytorch" and self.pt_model is not None:
+            image = Image.open(image_path).convert("RGB")
             import torch
 
             tensor = self.transform(image).unsqueeze(0).to(self.device)
             with torch.no_grad():
                 logits = self.pt_model(tensor)
-                probs = torch.softmax(logits, dim=1).squeeze(0).cpu().numpy()
-        else:
-            resized = image.resize(self.image_size)
-            data = np.asarray(resized, dtype=np.float32)[None, ...]
-            det = self.interpreter.get_input_details()[0]
-            if det["dtype"] == np.uint8:
-                sc, zp = det["quantization"]
-                data = (data / sc + zp).astype(np.uint8) if sc else data.astype(np.uint8)
-            else:
-                data = (data / 127.5) - 1.0
-            self.interpreter.set_tensor(det["index"], data)
-            self.interpreter.invoke()
-            output = self.interpreter.get_tensor(
-                self.interpreter.get_output_details()[0]["index"]
-            )[0]
-            if np.max(output) > 1.0 or np.min(output) < 0.0:
-                exp = np.exp(output - np.max(output))
-                probs = exp / np.sum(exp)
-            else:
-                probs = output
+                return torch.softmax(logits, dim=1).squeeze(0).cpu().numpy()
 
-        return probs
+        return self._run_tflite_model(
+            image_path, self.interpreter, self.image_size, self.preprocess_mode
+        )
+
+    def _run_legacy_model(self, image_path: str) -> np.ndarray:
+        """Run the optional legacy dermoscopic model."""
+        return self._run_tflite_model(
+            image_path,
+            self.legacy_interpreter,
+            self.legacy_image_size,
+            "raw_0_255",
+        )
+
+    def _run_acne_model(self, image_path: str) -> np.ndarray:
+        """Run the optional focused acne model."""
+        return self._run_tflite_model(
+            image_path,
+            self.acne_interpreter,
+            self.acne_image_size,
+            self.acne_preprocess_mode,
+        )
+
+    @staticmethod
+    def _run_tflite_model(
+        image_path: str,
+        interpreter: Any,
+        image_size: tuple[int, int],
+        preprocess_mode: str,
+    ) -> np.ndarray:
+        """Run one float/quantized TFLite model with explicit preprocessing."""
+        if interpreter is None:
+            raise RuntimeError("TFLite interpreter is not available")
+
+        image = Image.open(image_path).convert("RGB")
+        resized = image.resize(image_size)
+        data = np.asarray(resized, dtype=np.float32)[None, ...]
+        det = interpreter.get_input_details()[0]
+        if det["dtype"] == np.uint8:
+            sc, zp = det["quantization"]
+            data = (data / sc + zp).astype(np.uint8) if sc else data.astype(np.uint8)
+        elif preprocess_mode == "zero_one":
+            data = data / 255.0
+        elif preprocess_mode == "raw_0_255":
+            # The SCIN and legacy exports contain their own preprocessing.
+            pass
+        else:
+            data = (data / 127.5) - 1.0
+        interpreter.set_tensor(det["index"], data)
+        interpreter.invoke()
+        output = interpreter.get_tensor(
+            interpreter.get_output_details()[0]["index"]
+        )[0]
+        if np.max(output) > 1.0 or np.min(output) < 0.0:
+            exp = np.exp(output - np.max(output))
+            return exp / np.sum(exp)
+        return output
+
+    def _run_skin_gate(self, image_path: str) -> Optional[tuple[bool, float]]:
+        """Return (is_skin, confidence) from the optional trained gate."""
+        if self.gate_interpreter is None:
+            return None
+
+        image = Image.open(image_path).convert("RGB")
+        details = self.gate_interpreter.get_input_details()[0]
+        shape = details["shape"]
+        gate_size = (int(shape[2]), int(shape[1])) if len(shape) == 4 else (224, 224)
+        data = np.asarray(image.resize(gate_size), dtype=np.float32)[None, ...]
+        if details["dtype"] == np.uint8:
+            scale, zero_point = details["quantization"]
+            data = (data / scale + zero_point).astype(np.uint8) if scale else data.astype(np.uint8)
+        # The trained gate contains its own Keras Rescaling layer, so float
+        # inputs must remain in the original 0..255 image range. Normalizing
+        # here would apply the transform twice and invert gate predictions.
+
+        self.gate_interpreter.set_tensor(details["index"], data)
+        self.gate_interpreter.invoke()
+        output = self.gate_interpreter.get_tensor(
+            self.gate_interpreter.get_output_details()[0]["index"]
+        )[0]
+        if np.max(output) > 1.0 or np.min(output) < 0.0:
+            exp = np.exp(output - np.max(output))
+            output = exp / np.sum(exp)
+
+        labels = [label.lower().replace("_", " ") for label in self.gate_labels]
+        skin_index = next((i for i, label in enumerate(labels) if "skin" in label and "non" not in label), None)
+        non_skin_index = next((i for i, label in enumerate(labels) if "non" in label), None)
+        if skin_index is None or non_skin_index is None:
+            return None
+
+        predicted_index = int(np.argmax(output))
+        confidence = float(output[predicted_index])
+        return predicted_index == skin_index, confidence
+
+    def _predict_acne_local(self, image_path: str) -> dict:
+        """Focused acne screening after the existing skin/non-skin gate."""
+        trained_gate = self._run_skin_gate(image_path)
+        is_skin_color, skin_ratio = skin_gate_hsv(image_path)
+        document_like = looks_like_document(image_path)
+        probs = np.asarray(self._run_acne_model(image_path), dtype=np.float32).reshape(-1)
+        probs = probs / max(float(np.sum(probs)), 1e-8)
+        acne_index = next(
+            (i for i, name in enumerate(self.acne_labels)
+             if "acne" in name.lower() and "not" not in name.lower()),
+            None,
+        )
+        if acne_index is None or len(probs) != 2:
+            raise RuntimeError("Focused acne model labels must contain Acne and Not_Acne")
+
+        index = int(np.argmax(probs))
+        confidence = float(probs[index])
+        acne_confidence = float(probs[acne_index])
+        predicted_acne = index == acne_index
+        top_idx = np.argsort(probs)[::-1]
+        top3 = [
+            (self.acne_labels[i], float(probs[i]))
+            for i in top_idx[:2]
+        ]
+        probabilities = {
+            self.acne_labels[i]: float(probs[i]) for i in range(len(probs))
+        }
+
+        strong_hsv_skin = is_skin_color and skin_ratio >= 0.50
+        gate_rejects = trained_gate is not None and (
+            (not trained_gate[0] and trained_gate[1] >= 0.65 and not strong_hsv_skin)
+            or (trained_gate[0] and trained_gate[1] < 0.65 and not strong_hsv_skin)
+        )
+
+        if gate_rejects or document_like or skin_ratio < 0.05:
+            info = DISEASE_INFO["Other_Non_Skin"]
+            category = "non_skin"
+            label = f"{info['emoji']} Not a Skin Image — Please upload a photo of skin"
+        elif not is_skin_color and confidence < 0.65:
+            info = DISEASE_INFO["Other_Non_Skin"]
+            category = "non_skin"
+            label = f"{info['emoji']} Not a Skin Image — Please upload a photo of skin"
+        elif confidence < self.min_confidence:
+            info = {
+                "description": "The focused acne model is not confident enough for a screening result.",
+                "severity": "Try a closer, clearer, better-lit photo",
+                "emoji": "❓",
+                "category": "uncertain",
+            }
+            category = "uncertain"
+            label = f"❓ Uncertain — Low Confidence ({confidence:.1%}) — Please try a clearer photo"
+        elif predicted_acne:
+            info = DISEASE_INFO["Acne Vulgaris"]
+            category = "lesion"
+            label = f"{info['emoji']} Possible Acne Vulgaris — Screening Result Only"
+        else:
+            info = {
+                "description": "The focused model did not find a strong acne pattern in this image.",
+                "severity": "No acne pattern detected; other conditions are not ruled out",
+                "emoji": "✅",
+                "category": "non_acne",
+            }
+            category = "non_acne"
+            label = "✅ No Strong Acne Pattern Detected — Other Conditions Not Ruled Out"
+
+        return {
+            "label": label,
+            "raw_class": self.acne_labels[index],
+            "confidence": confidence,
+            "acne_confidence": acne_confidence,
+            "category": category,
+            "status": "model",
+            "probabilities": probabilities,
+            "disease_info": info,
+            "top3": top3,
+            "model_used": "focused acne model",
+            "notes": (
+                f"Skin color ratio: {skin_ratio:.1%} | Acne probability: {acne_confidence:.1%}"
+                + (
+                    f" | Trained gate: {'skin' if trained_gate[0] else 'non-skin'} "
+                    f"({trained_gate[1]:.1%})"
+                    if trained_gate is not None else ""
+                )
+            ),
+        }
 
     def _predict_local(self, image_path: str) -> dict:
         """Local model prediction with skin gate + entropy-based rejection."""
 
-        # ── Gate 1: HSV skin color check ─────────────────────────────────────
+        if self.acne_interpreter is not None and (self.acne_focus or self.acne_priority):
+            acne_result = self._predict_acne_local(image_path)
+            # Acne gets first priority. If the focused model says that the
+            # image is not acne, continue to the broader disease experts.
+            if self.acne_focus or acne_result["category"] in {"lesion", "non_skin"}:
+                return acne_result
+
+        # ── Gate 1: trained skin/non-skin model ──────────────────────────────
+        trained_gate = self._run_skin_gate(image_path)
+
+        # ── Gate 2: HSV skin color and document checks ───────────────────────
         is_skin_color, skin_ratio = skin_gate_hsv(image_path)
         document_like = looks_like_document(image_path)
 
         # ── Run model ─────────────────────────────────────────────────────────
         probs = self._run_local_model(image_path)
+        active_labels = self.labels
+        selected_model = "SCIN"
         index = int(np.argmax(probs))
         confidence = float(probs[index])
-        raw_label = self.labels[index] if index < len(self.labels) else f"Class {index}"
+
+        # Use the SCIN expert for its newer common-disease classes when it has
+        # a usable signal. Fall back to the older dermoscopic expert only when
+        # the SCIN expert is weak and the legacy expert is clearly confident.
+        # This keeps both taxonomies available without pretending their scores
+        # are directly comparable.
+        if self.legacy_interpreter is not None and self.legacy_labels:
+            legacy_probs = self._run_legacy_model(image_path)
+            legacy_confidence = float(np.max(legacy_probs))
+            if confidence < 0.65 and legacy_confidence >= 0.75:
+                probs = legacy_probs
+                active_labels = self.legacy_labels
+                selected_model = "legacy HAM10000"
+
+        index = int(np.argmax(probs))
+        confidence = float(probs[index])
+        raw_label = active_labels[index] if index < len(active_labels) else f"Class {index}"
 
         # Top-3 predictions
         top_idx = np.argsort(probs)[::-1][:3]
         top3 = [
-            (self.labels[i] if i < len(self.labels) else f"Class {i}", float(probs[i]))
+            (active_labels[i] if i < len(active_labels) else f"Class {i}", float(probs[i]))
             for i in top_idx
         ]
 
         probabilities = {
-            (self.labels[i] if i < len(self.labels) else f"Class {i}"): float(probs[i])
+            (active_labels[i] if i < len(active_labels) else f"Class {i}"): float(probs[i])
             for i in range(len(probs))
         }
 
@@ -829,7 +1190,32 @@ RULES:
         # never allow the classifier to force a disease label onto an object.
         # The HSV gate is intentionally conservative so darker skin tones are
         # not rejected solely by this heuristic.
-        if document_like:
+        # Treat the trained gate as a strong signal, but allow a clear
+        # close-up skin region to recover from a gate false-negative.  This is
+        # needed for photos such as a bald scalp/lesion where hair, glasses,
+        # shadows, and the surrounding background can dominate the gate.  A
+        # high HSV skin ratio (50%+) is deliberately required so a small
+        # skin-coloured object in a room does not bypass the gate.
+        strong_hsv_skin = is_skin_color and skin_ratio >= 0.50
+        gate_rejects = trained_gate is not None and (
+            (
+                not trained_gate[0]
+                and trained_gate[1] >= 0.65
+                and not strong_hsv_skin
+            )
+            or (
+                trained_gate[0]
+                and trained_gate[1] < 0.65
+                and not strong_hsv_skin
+            )
+        )
+
+        if gate_rejects:
+            category = "non_skin"
+            info = DISEASE_INFO["Other_Non_Skin"]
+            label = f"{info['emoji']} Not a Confirmed Skin Image — Please upload a clear photo of skin"
+
+        elif document_like:
             category = "non_skin"
             info = DISEASE_INFO["Other_Non_Skin"]
             label = f"{info['emoji']} Not a Skin Image — Please upload a photo of skin"
@@ -885,7 +1271,17 @@ RULES:
             "probabilities": probabilities,
             "disease_info": info,
             "top3": top3,
-            "notes": f"Skin color ratio: {skin_ratio:.1%} | Entropy ratio: {entropy_ratio:.2f}",
+            "model_used": selected_model,
+            "notes": (
+                f"Skin color ratio: {skin_ratio:.1%} | Entropy ratio: {entropy_ratio:.2f}"
+                + (
+                    f" | Trained gate: {'skin' if trained_gate[0] else 'non-skin'} "
+                    f"({trained_gate[1]:.1%})"
+                    if trained_gate is not None
+                    else ""
+                )
+                + f" | Disease model: {selected_model}"
+            ),
         }
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -914,9 +1310,4 @@ RULES:
 
         if self.gemini_model is not None:
             return self._predict_gemini(image_path)
-        if self.ollama_model:
-            try:
-                return self._predict_ollama(image_path)
-            except (OSError, ValueError, KeyError, json.JSONDecodeError, urllib.error.URLError) as exc:
-                self.load_error = f"Ollama unavailable: {exc}"
         return self._predict_local(image_path)

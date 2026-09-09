@@ -1,0 +1,4 @@
+# Training only; keep this separate from the lightweight deployment runtime.
+tensorflow-cpu>=2.16
+Pillow>=10.0
+numpy>=1.26

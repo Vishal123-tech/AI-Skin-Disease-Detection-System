@@ -1,24 +1,50 @@
+import os
+import sys
 import time
 import requests
 import cv2
 
-# Server URL (Live Render endpoint)
-SERVER_URL = "https://ai-skin-disease-detection-system.onrender.com/api/predict"
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+# Use the Raspberry Pi's local Flask server by default. Override this when
+# intentionally sending to a hosted API: $env:SERVER_URL=... or export SERVER_URL=...
+SERVER_URL = os.environ.get("SERVER_URL", "http://127.0.0.1:5000/api/predict")
+
+
+def capture_image(filename: str) -> bool:
+    """Capture with Picamera2 when available, otherwise use OpenCV."""
+    try:
+        from picamera2 import Picamera2
+
+        camera = Picamera2()
+        camera.configure(camera.create_still_configuration(main={"size": (1280, 960)}))
+        camera.start()
+        time.sleep(2)
+        camera.capture_file(filename)
+        camera.stop()
+        return True
+    except ImportError:
+        print("Picamera2 is not installed; trying OpenCV camera capture.")
+    except Exception as exc:
+        print(f"Picamera2 capture failed: {exc}")
+
+    cap = cv2.VideoCapture(0)
+    time.sleep(1)
+    ret, frame = cap.read()
+    cap.release()
+    return bool(ret and cv2.imwrite(filename, frame))
 
 def capture_and_send():
     print("Capturing skin lesion image from camera...")
-    cap = cv2.VideoCapture(0)
-    time.sleep(1) # Give camera time to warm up/focus
-    ret, frame = cap.read()
-    cap.release()
-
-    if not ret:
+    temp_filename = "pi_lesion_capture.jpg"
+    if not capture_image(temp_filename):
         print("Error: Could not capture image from camera.")
         return
 
-    # Save temporary image
-    temp_filename = "pi_lesion_capture.jpg"
-    cv2.imwrite(temp_filename, frame)
     print(f"Image saved locally as {temp_filename}")
 
     # Send image to the website API

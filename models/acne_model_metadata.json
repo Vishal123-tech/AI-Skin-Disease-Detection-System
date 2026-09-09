@@ -1,0 +1,15 @@
+{
+  "source": "ACNE04 or an explicitly licensed/consented project dataset",
+  "architecture": "MobileNetV2 transfer learning with final-layer fine tuning",
+  "input_size": [
+    224,
+    224
+  ],
+  "input_preprocessing": "raw_0_255",
+  "class_names": [
+    "Acne",
+    "Not_Acne"
+  ],
+  "positive_class": "Acne",
+  "scope": "Educational acne screening prototype; not a medical diagnosis"
+}
