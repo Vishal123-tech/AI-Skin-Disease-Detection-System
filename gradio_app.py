@@ -16,7 +16,7 @@ from config import (
     MODEL_PATH,
     REPORT_DIR,
 )
-from predictor  import SkinPredictor
+from predictor import SkinPredictor
 from quality import check_image
 from report import create_report
 from feedback import (
