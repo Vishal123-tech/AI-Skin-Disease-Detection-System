@@ -41,7 +41,7 @@ DISEASE_INFO: dict[str, dict] = {
             "Most common type of skin cancer. Appears as a pearly or waxy bump on "
             "sun-exposed areas (face, neck, hands). Grows slowly but must be treated."
         ),
-        "severity": "High — Consult a dermatologist urgently",
+        "severity": "High — Consult a  dermatologist urgently",
         "emoji": "⚠️",
         "category": "lesion",
         "also_known_as": ["BCC"],
