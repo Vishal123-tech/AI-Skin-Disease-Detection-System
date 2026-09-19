@@ -8,6 +8,7 @@ reports/
 instance/
 work/
 outputs/
+output/
 feedback/
 .env
 google_drive_token.json
