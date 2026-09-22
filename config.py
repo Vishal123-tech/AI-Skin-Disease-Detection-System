@@ -4,7 +4,7 @@ from pathlib import Path
 # ── Load .env file if present (dev convenience) ───────────────────────────────
 _env_file = Path(__file__).resolve().parent / ".env"
 if _env_file.exists():
-    for _line in _env_file.read_text(encoding="utf-8").splitlines():
+    for _line in  _env_file.read_text(encoding="utf-8").splitlines():
         _line = _line.strip()
         if _line and not _line.startswith("#") and "=" in _line:
             _k, _, _v = _line.partition("=")
