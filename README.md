@@ -1,16 +1,3 @@
----
-title: SkinScanix
-emoji: 🩺
-colorFrom: blue
-colorTo: green
-sdk: gradio
-sdk_version: "6.25.0"
-app_file: gradio_app.py
-app_port: 7860
-python_version: "3.12"
-short_description: Educational skin image screening prototype
----
-
 <p align="center">
   <img src="static/skinscanix-logo.png" alt="SkinScanix — AI Skin Disease Detection" width="240">
 </p>
