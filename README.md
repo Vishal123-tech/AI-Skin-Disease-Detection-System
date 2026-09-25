@@ -1,16 +1,17 @@
 ---
-title: AI Skin Disease Detection
+title: SkinScanix
 emoji: 🩺
 colorFrom: blue
 colorTo: green
 sdk: gradio
+sdk_version: "6.25.0"
 app_file: gradio_app.py
 app_port: 7860
 python_version: "3.12"
 short_description: Educational skin image screening prototype
 ---
 
-# AI Skin Disease Detection
+# SkinScanix - AI Skin Disease Detection
 
 Educational prototype for capturing a skin image, rejecting obvious non-skin images, running a lightweight image classifier, and generating a PDF report.
 
@@ -24,12 +25,12 @@ Open the demo on a phone or computer, upload an image, select **Analyze Image**,
 
 ## Features
 
-- Dark Gradio interface for image upload, analysis, and report download.
+- SkinScanix branding, responsive light/dark Gradio interface, and matching compact Settings/API panels.
 - Skin/non-skin checks using a trained gate and image heuristics.
-- Acne-priority inference, a common-condition classifier, and a legacy lesion model.
+- Common-condition and legacy lesion classifiers; the unreliable acne cross-check is disabled in the pinned baseline.
 - Blur and brightness measurements, plus uncertain-input handling.
-- Professional, paginated PDF reports with the uploaded image, classification, confidence, quality metrics, analysis summary, next steps, and disclaimer.
-- Consent-based feedback collection and experimental, manually triggered retraining.
+- Compact A4 PDF reports with the uploaded image, classification, confidence, quality metrics, analysis summary, next steps, and disclaimer. Standard reports fit one page; unusually long notes continue rather than being discarded.
+- Consent-based feedback collection for supervised retraining; unsafe one-click model updates are paused.
 - Separate Flask JSON API and Raspberry Pi capture/upload client.
 
 ## Architecture
@@ -89,16 +90,16 @@ Activate with `.\.venv\Scripts\Activate.ps1` on Windows PowerShell, or `source .
 
 ### Browser interface
 
-This is the simple Gradio layout matching the current live design:
+Start the local-only SkinScanix preview:
 
 ```bash
 python -m pip install -r requirements-space.txt
-python gradio_app.py
+python run_local_ui.py
 ```
 
 Open: `http://127.0.0.1:7860/`
 
-This address works only on the computer running the app. Keep its process running. The local launcher also attempts to create a temporary Gradio share link and prints it in the terminal.
+This address works only on the computer running the app. Keep its process running. This launcher does not create a public tunnel. Use `?__theme=light` or `?__theme=dark` to preview either theme.
 
 The browser requirements include CPU-only PyTorch, torchvision, Gradio, and LiteRT. Full TensorFlow is not needed for this inference setup. The pinned CPU wheels target Windows/Linux x86-64; the Raspberry Pi camera client does not need the server's model dependencies.
 
@@ -152,18 +153,19 @@ The current public Render service starts Gradio and does not expose the Flask `/
 
 - `models/skin_gate.tflite`: trained two-class `SKIN`/`NON_SKIN` gate.
 - `models/skin_gate_labels.txt`: gate label order.
-- `models/skin_model.pt`: PyTorch MobileNetV2 checkpoint, preferred by the local backend when available.
+- `models/skin_model.pt`: retained feedback-trained checkpoint; not active in the pinned configuration after a single-class prediction regression.
 - `models/skin_model.tflite`: locally trained four-class SCIN baseline exported from Google Colab.
 - `models/labels.txt`: `Acne Vulgaris`, `Eczema`, `Fungal Infection`, and `Psoriasis`.
 - `models/skin_model_legacy.tflite`: previous seven-class HAM10000/dermoscopic model used as a local fallback.
 - `models/labels_legacy.txt`: labels for the previous lesion model.
-- `models/skin_model_metadata.json`: input preprocessing and model-scope metadata used by the predictor.
+- `models/skin_model_metadata.json`: historical feedback-training metadata; not the deployment selection.
+- `models/skin_model.runtime.json`: active TFLite artifact hash, label order, raw-pixel preprocessing, and disabled acne cross-check. Mismatches stop loading rather than silently selecting other weights.
 - `models/acne_model.tflite`: bundled focused two-class acne model.
 - `models/acne_labels.txt`: labels for the optional acne model.
 
-The prediction pipeline combines the trained gate, image heuristics, acne-priority inference, and disease experts. The main classifier covers Acne Vulgaris, Eczema, Fungal Infection, and Psoriasis. The legacy expert covers Actinic Keratoses, Basal Cell Carcinoma, Benign Keratosis like Lesions, Dermatofibroma, Melanocytic Nevi, Melanoma, and Vascular Lesions.
+The prediction pipeline combines the trained gate, image heuristics, and disease experts. The main classifier covers Acne Vulgaris, Eczema, Fungal Infection, and Psoriasis. The legacy expert covers Actinic Keratoses, Basal Cell Carcinoma, Benign Keratosis like Lesions, Dermatofibroma, Melanocytic Nevi, Melanoma, and Vascular Lesions.
 
-The predictor prefers the PyTorch checkpoint, uses LiteRT for TFLite models, and can select the legacy expert when the main expert is uncertain. This is not a single validated 11-class classifier. Gates can reject genuine skin images and can also admit unrelated objects. A Normal Skin feedback option does not establish a validated healthy-skin classifier.
+The pinned local configuration uses the earlier SCIN TFLite baseline through LiteRT, even when a newer `.pt` file exists. Its embedded rescaling requires raw 0–255 input; overwritten feedback metadata must not change this. The legacy expert can still be selected when the main expert is uncertain. This is not a single validated 11-class classifier. Gates can reject genuine skin images and admit unrelated objects. A Normal Skin feedback option does not establish a validated healthy-skin classifier. See [the regression audit](docs/MODEL_REGRESSION_AUDIT.md) for measured limitations.
 
 ### Feedback for future improvement
 
@@ -172,11 +174,11 @@ After an analysis, the Gradio interface lets a user mark the result as
 condition label. Feedback is stored locally in the ignored `feedback/` folder
 for later use. Saving feedback alone does not train the model.
 
-The **Retrain Model on Feedback Now** button explicitly runs `self_train.py`. It uses eligible user-labelled feedback and available replay images, backs up model files, updates the PyTorch checkpoint, and reloads it. Corrections are not automatically verified by a dermatologist, and retraining does not guarantee better accuracy.
+One-click feedback training is paused. `self_train.train_on_feedback()` returns a review-required message without training or changing files. The **Check retraining status** button explains this safeguard. Corrections are not automatically verified by a dermatologist. Use reviewed data and an independently evaluated candidate before manually activating new weights.
 
-The current interface exposes this control without a separate administrator login. Access control, reviewed labels, and independent evaluation remain necessary for a public feedback-learning service. Substantial training should run locally or in Colab rather than on the small Render inference instance.
+Access control, reviewed labels, and independent evaluation remain necessary for a public feedback-learning service. Substantial training should run locally or in Colab rather than on the small Render inference instance.
 
-Feedback and model changes inside a cloud instance are not durable unless persistent storage is configured. They are not automatically pushed to GitHub. The [feedback workflow guide](docs/FEEDBACK_LOOP.md) describes the earlier supervised workflow; the current code additionally supports manual retraining.
+Feedback inside a cloud instance is not durable unless persistent storage is configured. It is not automatically pushed to GitHub. Follow the [supervised feedback workflow](docs/FEEDBACK_LOOP.md).
 
 ### Optional permanent Google Drive storage
 
@@ -198,9 +200,15 @@ values alone does not connect Drive storage to the current feedback save path.
 
 If acne is the main college-project target, train a separate binary model with
 `train_acne.py` using real `Acne` and `Not_Acne` folders. After independently
-testing it, the default `ACNE_PRIORITY_MODE=1` makes the local app check acne
-first and then continue to the broader disease experts when acne is not the
-best match. Set `ACNE_FOCUS_MODE=1` only if you want an acne-only demo.
+testing it, `ACNE_PRIORITY_MODE=1` can enable an acne cross-check in an unpinned configuration after
+the broader disease classifier runs. The specialist cannot override another
+condition. Conflicting acne/non-acne decisions produce an uncertain result
+without a combined confidence score; agreement preserves the broader model's
+score. This is a routing safeguard, not evidence of improved model accuracy.
+The checked-in runtime pin disables that cross-check even if the environment
+requests it, because the bundled specialist produced many false positives in
+the local audit. `ACNE_FOCUS_MODE=1` remains an explicit experimental binary-only
+demo; it is not the normal workflow and the bundled weights are unreliable.
 
 The ISIC 2016 images supplied for this project do not have acne labels, so they
 cannot train an acne detector by themselves. Use `prepare_acne_dataset.py`
@@ -210,6 +218,23 @@ See [`docs/ACNE_TRAINING.md`](docs/ACNE_TRAINING.md) for dataset requirements,
 licensing, folder structure, and evaluation rules.
 
 ## Training a replacement model
+
+For the existing SCIN case-labelled dataset, the isolated experimental trainer
+provides balanced sampling, case-separated internal validation, checkpoint
+selection by macro-F1, and a final historical comparison without modifying
+`models/`:
+
+```powershell
+python train_candidate.py --data work/scin_training_dataset_test/scin_training_dataset --name my_new_scin_candidate --head-epochs 25 --fine-epochs 4
+```
+
+Choose a new name for every run. This script requires the cached official
+ImageNet MobileNetV2 weights, PyTorch/torchvision, and LiteRT. It does not download
+images or upload data. Outputs are written under ignored `work/candidates/`:
+weights, labels, preprocessing metadata, case split manifest, training history,
+and `evaluation.json`. The historical validation set has already been used in
+development and must not be described as an independent clinical test. A
+trained candidate is **not** automatically promoted or deployed.
 
 Use a dataset with this structure:
 

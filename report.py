@@ -18,6 +18,7 @@ from typing import Any
 
 from PIL import Image as PILImage
 from PIL import ImageOps
+from branding import BRAND_NAME, LOGO_PATH
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -26,9 +27,9 @@ from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 from reportlab.platypus import (
-    CondPageBreak,
     Flowable,
     KeepTogether,
+    Image as ReportImage,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -58,7 +59,7 @@ BLUE_GRAY = colors.HexColor("#596C7C")
 PAGE_WIDTH, PAGE_HEIGHT = A4
 LEFT_MARGIN = 17 * mm
 RIGHT_MARGIN = 17 * mm
-TOP_MARGIN = 21 * mm
+TOP_MARGIN = 14 * mm
 BOTTOM_MARGIN = 24 * mm
 CONTENT_WIDTH = PAGE_WIDTH - LEFT_MARGIN - RIGHT_MARGIN
 
@@ -199,7 +200,7 @@ def _styles() -> dict[str, ParagraphStyle]:
             fontSize=9.2, leading=14, textColor=CHARCOAL, backColor=CARD,
             borderColor=LINE, borderWidth=0.7,
             borderPadding=(4 * mm, 4 * mm, 4 * mm, 4 * mm),
-            borderRadius=3 * mm, spaceAfter=2.5 * mm,
+            borderRadius=3 * mm, spaceAfter=9 * mm,
         ),
         "next_step": ParagraphStyle(
             "NextStep", parent=sample["BodyText"], fontName="Helvetica",
@@ -275,8 +276,8 @@ class NumberedCanvas(canvas.Canvas):
     def __init__(self, *args, **kwargs) -> None:
         canvas.Canvas.__init__(self, *args, **kwargs)
         self._saved_page_states: list[dict] = []
-        self.setTitle("AI Skin Image Analysis - AI-Assisted Skin Screening Report")
-        self.setAuthor("AI Skin Disease Detection Prototype")
+        self.setTitle(f"{BRAND_NAME} - AI-Assisted Skin Screening Report")
+        self.setAuthor(f"{BRAND_NAME} Educational Prototype")
         self.setSubject("Educational AI-assisted skin image screening report")
 
     def showPage(self) -> None:
@@ -298,7 +299,9 @@ class NumberedCanvas(canvas.Canvas):
         self.saveState()
         self.setFont("Helvetica-Bold", 7.5)
         self.setFillColor(NAVY)
-        self.drawString(LEFT_MARGIN, PAGE_HEIGHT - 10.5 * mm, "AI Skin Image Analysis")
+        self.drawImage(str(LOGO_PATH), LEFT_MARGIN, PAGE_HEIGHT - 12 * mm,
+                       width=8 * mm, height=8 * mm, preserveAspectRatio=True, mask="auto")
+        self.drawString(LEFT_MARGIN + 11 * mm, PAGE_HEIGHT - 10.5 * mm, f"{BRAND_NAME} | Skin Image Analysis")
         self.setFont("Helvetica", 7.2)
         self.setFillColor(MUTED)
         self.drawRightString(
@@ -326,7 +329,7 @@ class NumberedCanvas(canvas.Canvas):
         disclaimer.drawOn(self, LEFT_MARGIN, 9.2 * mm)
         self.setFont("Helvetica-Bold", 6.8)
         self.setFillColor(NAVY)
-        self.drawString(LEFT_MARGIN, 5.5 * mm, "AI Skin Image Analysis | Educational Screening Prototype")
+        self.drawString(LEFT_MARGIN, 5.5 * mm, f"{BRAND_NAME} | Educational Screening Prototype")
         self.setFont("Helvetica", 6.8)
         self.setFillColor(MUTED)
         self.drawRightString(
@@ -365,21 +368,12 @@ def _section_heading(number: str, title: str, styles: dict[str, ParagraphStyle])
 
 
 def create_header(generated_at: datetime, styles: dict[str, ParagraphStyle]) -> list[Flowable]:
-    mark_style = ParagraphStyle("Mark", parent=styles["badge"], fontSize=11, leading=13)
-    mark = Table([[Paragraph("AI", mark_style)]], colWidths=[12 * mm], rowHeights=[12 * mm])
-    mark.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), ACCENT),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
+    mark = ReportImage(str(LOGO_PATH), width=22 * mm, height=22 * mm)
     title_stack = [
-        Paragraph("AI Skin Image Analysis", styles["title"]),
+        Paragraph(BRAND_NAME, styles["title"]),
         Paragraph("AI-Assisted Skin Screening Report", styles["subtitle"]),
         Paragraph(
-            "Computer Vision | Image Analysis | Educational Screening Prototype",
+            "AI Skin Image Analysis | Educational Prototype",
             styles["kicker"],
         ),
     ]
@@ -389,7 +383,7 @@ def create_header(generated_at: datetime, styles: dict[str, ParagraphStyle]) -> 
     )
     header = Table(
         [[mark, title_stack, metadata]],
-        colWidths=[16 * mm, CONTENT_WIDTH - 52 * mm, 36 * mm],
+        colWidths=[32 * mm, CONTENT_WIDTH - 68 * mm, 36 * mm],
     )
     header.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -399,7 +393,39 @@ def create_header(generated_at: datetime, styles: dict[str, ParagraphStyle]) -> 
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3 * mm),
         ("LINEBELOW", (0, 0), (-1, -1), 1.1, ACCENT),
     ]))
-    return [header, Spacer(1, 5 * mm)]
+    return [header, Spacer(1, 4 * mm)]
+
+
+def create_overview(image_path: Path, result: dict, styles: dict) -> list[Flowable]:
+    """Compact image/result pair; preserve values and the uncropped photograph."""
+    badge_text, badge_color = _category_presentation(result)
+    badge_style = ParagraphStyle("OverviewStatus", parent=styles["small"],
+                                 textColor=badge_color, fontName="Helvetica-Bold")
+    result_style = ParagraphStyle("OverviewResult", parent=styles["result"],
+                                  fontSize=15, leading=19)
+    right = [
+        Paragraph(html.escape(badge_text), badge_style), Spacer(1, 3 * mm),
+        Paragraph(_safe(result.get("label") or result.get("raw_class"), "Unknown result"), result_style),
+        Spacer(1, 4 * mm),
+        Paragraph("MODEL CONFIDENCE", styles["card_label"]),
+        Paragraph(_confidence(result), styles["card_value"]), Spacer(1, 3 * mm),
+        Paragraph("This score is not the probability that you have this condition. "
+                  "A photo alone cannot confirm a diagnosis.", styles["small"]),
+    ]
+    image_width = 67 * mm
+    overview = Table([[
+        FramedImage(image_path, max_width=image_width, max_height=67 * mm,
+                    caption="Uploaded image"), right,
+    ]], colWidths=[image_width + 5 * mm, CONTENT_WIDTH - image_width - 5 * mm])
+    overview.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    return [_section_heading("01", "IMAGE & AI SCREENING RESULT", styles),
+            Spacer(1, 3 * mm), overview, Spacer(1, 4 * mm)]
 
 
 def create_image_section(image_path: Path, styles: dict[str, ParagraphStyle]) -> list[Flowable]:
@@ -487,14 +513,14 @@ def create_quality_section(quality: Any, styles: dict[str, ParagraphStyle]) -> l
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 4 * mm),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4 * mm),
-        ("TOPPADDING", (0, 0), (-1, -1), 4 * mm),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4 * mm),
+        ("TOPPADDING", (0, 0), (-1, -1), 2.5 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5 * mm),
     ]))
     return [
-        _section_heading("03", "IMAGE QUALITY", styles),
+        _section_heading("02", "IMAGE QUALITY", styles),
         Spacer(1, 3 * mm), KeepTogether(metrics), Spacer(1, 1.5 * mm),
         Paragraph(f"<b>Quality assessment:</b> {message}", styles["small"]),
-        Spacer(1, 5 * mm),
+        Spacer(1, 3 * mm),
     ]
 
 
@@ -513,10 +539,10 @@ def create_summary_section(result: dict, styles: dict[str, ParagraphStyle]) -> l
         )
 
     content: list[Flowable] = [
-        _section_heading("04", "ANALYSIS SUMMARY", styles), Spacer(1, 3 * mm),
+        _section_heading("03", "ANALYSIS SUMMARY", styles), Spacer(1, 2 * mm),
     ]
     for text in paragraphs:
-        content.append(Paragraph(text, styles["info_box"]))
+        content.append(Paragraph(text, styles["body"]))
 
     top3 = result.get("top3") or []
     clean_top3: list[tuple[str, str]] = []
@@ -550,11 +576,11 @@ def create_summary_section(result: dict, styles: dict[str, ParagraphStyle]) -> l
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("LEFTPADDING", (0, 0), (-1, -1), 3 * mm),
             ("RIGHTPADDING", (0, 0), (-1, -1), 3 * mm),
-            ("TOPPADDING", (0, 0), (-1, -1), 2 * mm),
+            ("TOPPADDING", (0, 0), (-1, -1), 1 * mm),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 1 * mm),
         ]))
         content.extend([Spacer(1, 1 * mm), alternatives])
-    content.append(Spacer(1, 5 * mm))
+    content.append(Spacer(1, 3 * mm))
     return content
 
 
@@ -570,15 +596,19 @@ def create_next_step_section(
     if not next_step:
         return []
     return [
-        _section_heading("05", "INTERPRETATION / NEXT STEP", styles),
-        Spacer(1, 3 * mm),
-        Paragraph(f"<b>Next step</b><br/>{_safe(next_step)}", styles["next_step"]),
+        _section_heading("04", "INTERPRETATION / NEXT STEP", styles),
+        Spacer(1, 2 * mm),
+        Paragraph(_safe(next_step), styles["body"]),
         Spacer(1, 3 * mm),
     ]
 
 
 def create_report(image_path: Path, result: dict, quality: Any, output_path: Path) -> Path:
-    """Create a polished A4 report from existing application values."""
+    """Create a compact A4 report, normally one page, without dropping content.
+
+    Exceptionally long supplied notes may continue rather than being clipped or
+    shrunk below readable type sizes. Prediction values are never modified.
+    """
 
     image_path = Path(image_path)
     output_path = Path(output_path)
@@ -587,20 +617,21 @@ def create_report(image_path: Path, result: dict, quality: Any, output_path: Pat
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     styles = _styles()
+    styles["body"].fontSize = 9
+    styles["body"].leading = 12
+    styles["body"].spaceAfter = 1.5 * mm
     doc = SimpleDocTemplate(
         str(output_path), pagesize=A4,
         rightMargin=RIGHT_MARGIN, leftMargin=LEFT_MARGIN,
         topMargin=TOP_MARGIN, bottomMargin=BOTTOM_MARGIN,
-        title="AI Skin Image Analysis - AI-Assisted Skin Screening Report",
-        author="AI Skin Disease Detection Prototype",
+        title=f"{BRAND_NAME} - AI-Assisted Skin Screening Report",
+        author=f"{BRAND_NAME} Educational Prototype",
         subject="Educational AI-assisted skin image screening report",
     )
     story: list[Flowable] = []
     story.extend(create_header(datetime.now(), styles))
-    story.extend(create_image_section(image_path, styles))
-    story.extend(create_result_card(result, styles))
+    story.extend(create_overview(image_path, result, styles))
     story.extend(create_quality_section(quality, styles))
-    story.append(CondPageBreak(78 * mm))
     story.extend(create_summary_section(result, styles))
     story.extend(create_next_step_section(result, quality, styles))
     doc.build(story, canvasmaker=NumberedCanvas)

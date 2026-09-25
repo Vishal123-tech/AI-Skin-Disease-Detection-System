@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 
 import gradio as gr
+from branding import BRAND_NAME, website_header
+from ui_presentation import CSS, EMPTY_RESULT, THEME_HEAD, render_result
 
 from config import (
     ACNE_LABELS_PATH,
@@ -51,47 +53,7 @@ def analyze(image_path):
     report_path = REPORT_DIR / f"{stamp}_report.pdf"
     create_report(image_path, result, quality, report_path)
 
-    confidence = (
-        f"{result['confidence']:.1%}"
-        if result["status"] != "demo"
-        else "Unavailable"
-    )
-    category = result.get("category", "lesion")
-    top_suggestion = ""
-    if category == "uncertain" and result.get("top3"):
-        top_condition, top_probability = result["top3"][0]
-        top_suggestion = (
-            f"\n**Top possible condition (not confirmed):** "
-            f"{top_condition} ({top_probability:.1%})"
-        )
-
-    if category == "normal":
-        category_header = "🟢 **Classification:** Normal Healthy Skin"
-    elif category == "non_skin":
-        category_header = "🟠 **Classification:** Not a Skin Image"
-    elif category == "uncertain":
-        category_header = "🟠 **Classification:** Uncertain Input"
-    elif category == "non_acne":
-        category_header = "🟢 **Classification:** No Strong Acne Pattern"
-    elif category == "lesion":
-        category_header = "🔴 **Classification:** Potential Skin Lesion Detected"
-    else:
-        category_header = "ℹ️ **Classification:** Demo Mode"
-
-    quality_notice = "" if quality.ok else f"\n\n> ⚠️ **Quality Warning:** {quality.message}"
-
-    text = f"""### {category_header}
-
-**Result:** {result['label']}
-**Confidence:** {confidence}{top_suggestion}
-
----
-**Image Quality Metrics:**
-- **Quality Status:** {quality.message}
-- **Blur Score:** {quality.blur_score:.1f}
-- **Brightness:** {quality.brightness:.1f}{quality_notice}
-
-> **Disclaimer:** Educational screening prototype only. This result is not a medical diagnosis. Consult a qualified healthcare professional or dermatologist."""
+    text = render_result(result, quality)
     feedback_context = {"image_path": str(image_path), "result": result}
     return text, str(report_path), feedback_context, gr.update(visible=True)
 
@@ -116,7 +78,7 @@ def refresh_stats_ui() -> str:
     stats = get_feedback_summary()
     return (
         f"**Feedback Collected:** {stats['total_feedback']} items "
-        f"({stats['correct_count']} verified, {stats['wrong_count']} corrected) | "
+        f"({stats['correct_count']} marked correct, {stats['wrong_count']} corrections) | "
         f"**Pending Retraining:** {stats['unlearned_count']} | "
         f"**Last Model Update:** `{stats['last_trained']}`"
     )
@@ -143,31 +105,48 @@ def run_self_training_ui() -> str:
         return f"❌ **Error during self-training:** {exc}"
 
 
-with gr.Blocks(title="AI Skin Disease Detection") as demo:
+UI_LAUNCH_KWARGS = {"css": CSS, "head": THEME_HEAD, "theme": gr.themes.Base(
+    primary_hue="orange", neutral_hue="slate", font=["system-ui", "sans-serif"]),
+    "footer_links": ["api", "settings"]}
+
+
+def reset_analysis():
+    """An edited upload must never retain another photo's report or feedback."""
+    return EMPTY_RESULT, None, None, gr.update(visible=False)
+
+
+with gr.Blocks(title=f"{BRAND_NAME} | AI Skin Disease Detection", analytics_enabled=False, fill_width=True) as demo:
+    gr.HTML(website_header(), elem_id="brand-header")
     gr.Markdown(
-        "# 🩺 AI Skin Disease Detection\n"
-        "Upload a skin image to run the classifier (detecting normal skin, "
-        "non-skin images, or skin lesions) and generate a PDF report."
+        "Upload a clear photo of the affected skin area for AI-assisted analysis "
+        "and a downloadable PDF report.", elem_id="intro"
     )
-    gr.Markdown(
-        "> **Important:** This is an educational prototype, not a medical diagnostic device."
-    )
-    with gr.Row():
-        image = gr.Image(type="filepath", label="Upload skin image")
-        result = gr.Markdown("Your result will appear here.")
-    analyze_button = gr.Button("Analyze Image", variant="primary")
-    report_file = gr.File(label="Download PDF report")
+    gr.HTML('<div class="workflow" aria-label="How it works"><span><b>1</b> Upload a photo</span>'
+            '<span><b>2</b> Review the analysis</span><span><b>3</b> Save your report</span></div>')
+    with gr.Row(elem_id="workspace"):
+        with gr.Column(scale=1, min_width=300):
+            gr.HTML('<div class="section-heading"><h2>Skin image</h2><span>Upload or use your camera</span></div>')
+            image = gr.Image(type="filepath", label="Upload skin image", height=350, elem_id="skin-upload")
+            gr.Markdown("**For a better photo** · Use even lighting, keep the camera steady, "
+                        "and frame the affected area closely. Avoid identifiable details where possible.", elem_id="photo-tips")
+        with gr.Column(scale=1, min_width=300):
+            gr.HTML('<div class="section-heading"><h2>Analysis overview</h2><span>AI-assisted · Not diagnostic</span></div>')
+            result = gr.HTML(EMPTY_RESULT, elem_id="analysis-result")
+    analyze_button = gr.Button("Analyze image", variant="primary", elem_id="analyze-button")
+    with gr.Group(elem_id="report-section"):
+        gr.HTML('<div class="section-heading"><h2>Your PDF report</h2><span>Available after analysis</span></div>')
+        report_file = gr.File(label="Download PDF report", interactive=False, height=85, elem_id="report-download")
     feedback_context = gr.State(None)
-    with gr.Group(visible=False) as feedback_group:
+    with gr.Group(visible=False, elem_id="feedback-panel") as feedback_group:
         gr.Markdown(
             "### Help improve this prototype\n"
-            "Was the result correct? Your feedback is saved for continuous learning; "
-            "the model adapts safely using experience replay to prevent forgetting."
+            "Was the result correct? Your feedback is saved for supervised review. "
+            "It does not automatically change the active model."
         )
         feedback_rating = gr.Radio(
             ["Correct", "Wrong", "Not sure"],
             label="Prediction feedback",
-            value="Correct",
+            value="Not sure",
         )
         correction_label = gr.Dropdown(
             choices=available_feedback_labels(),
@@ -186,15 +165,15 @@ with gr.Blocks(title="AI Skin Disease Detection") as demo:
         feedback_button = gr.Button("Save Feedback")
         feedback_status = gr.Markdown()
 
-    with gr.Accordion("🧠 Continuous Self-Training (Learn from Feedback)", open=True):
+    with gr.Accordion("Project details & feedback review", open=False, elem_id="project-details"):
         gr.Markdown(
-            "Fine-tune and adapt the AI model on confirmed user feedback. "
-            "The engine combines feedback images with baseline references (experience replay) "
-            "to prevent catastrophic forgetting, trains with PyTorch, and hot-reloads into memory."
+            "One-click training is paused after a model regression. Feedback remains saved. "
+            "A new model must be trained separately on reviewed data and tested across "
+            "all supported classes before activation."
         )
         stats_md = gr.Markdown(value=refresh_stats_ui)
         with gr.Row():
-            train_btn = gr.Button("⚡ Retrain Model on Feedback Now", variant="primary")
+            train_btn = gr.Button("Check retraining status")
             refresh_btn = gr.Button("🔄 Refresh Feedback Stats")
         train_status = gr.Markdown()
 
@@ -203,6 +182,7 @@ with gr.Blocks(title="AI Skin Disease Detection") as demo:
         inputs=image,
         outputs=[result, report_file, feedback_context, feedback_group],
     )
+    image.change(reset_analysis, outputs=[result, report_file, feedback_context, feedback_group])
     feedback_rating.change(
         lambda rating: gr.update(visible=rating == "Wrong"),
         inputs=feedback_rating,
@@ -219,6 +199,10 @@ with gr.Blocks(title="AI Skin Disease Detection") as demo:
         outputs=train_status,
     ).then(refresh_stats_ui, outputs=stats_md)
     refresh_btn.click(refresh_stats_ui, outputs=stats_md)
+    gr.HTML('<aside class="safety-banner" aria-label="Educational use notice"><strong>Educational prototype.</strong> '
+            'Results may be incorrect and do not replace a dermatologist’s assessment.</aside>', elem_id="educational-notice")
+    gr.HTML(f'<footer class="site-footer"><span><strong>{BRAND_NAME}</strong> · AI Skin Disease Detection</span>'
+            '<span>Research & education · Not for medical diagnosis</span></footer>')
 
 
 if __name__ == "__main__":
@@ -229,6 +213,7 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=PORT,
         share=(not is_cloud),
+        **UI_LAUNCH_KWARGS,
     )
     print(f"LOCAL_URL={local_url}", flush=True)
     print(f"PUBLIC_SHARE_URL={share_url}", flush=True)

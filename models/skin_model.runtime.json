@@ -1,0 +1,10 @@
+{
+  "backend": "tflite",
+  "source": "Original Google SCIN baseline; local rollback after feedback-model regression",
+  "sha256": "3d27f2e4d0fc7f123a455d432a5d8087d6d7028616a35174b4d052f8b4f51962",
+  "input_preprocessing": "raw_0_255",
+  "embedded_preprocessing": "Rescaling(1/127.5, offset=-1)",
+  "class_names": ["Acne Vulgaris", "Eczema", "Fungal Infection", "Psoriasis"],
+  "acne_crosscheck": false,
+  "scope": "Educational baseline only. Weak psoriasis performance; no clinical accuracy claim."
+}

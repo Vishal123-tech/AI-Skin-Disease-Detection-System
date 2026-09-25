@@ -30,8 +30,10 @@ from predictor import SkinPredictor
 from quality import check_image
 from report import create_report
 from feedback import record_feedback, trigger_self_training, get_feedback_summary
+from branding import website_header
 
 app = Flask(__name__)
+app.jinja_env.globals["brand_header"] = website_header()
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
 predictor = SkinPredictor(
     MODEL_PATH,
@@ -49,7 +51,7 @@ HTML = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI Skin Disease Detection</title>
+<title>SkinScanix | AI Skin Disease Detection</title>
 <style>
   :root {
     --bg: #0f172a; --surface: #1e293b; --surface2: #334155;
@@ -110,7 +112,7 @@ HTML = """<!doctype html>
 <div class="container">
 
   <div class="card">
-    <h1>🩺 AI Skin Disease Detection</h1>
+    {{ brand_header | safe }}
     <p class="subtitle">Upload a skin photo to get an AI-powered screening result with disease information and a PDF report.</p>
     <div class="notice">⚕️ <strong>Educational Prototype:</strong> This system is not a medical diagnostic device. Always consult a qualified dermatologist.</div>
 
@@ -141,7 +143,11 @@ HTML = """<!doctype html>
     </ul>
 
     {% elif result.category == 'uncertain' %}
+    {% if result.uncertainty_reason == 'model_disagreement' %}
+    <p style="color: #fde68a; margin-bottom: 12px;">The models disagree. No condition is confirmed. Confidence: {{ formatted_confidence }}. Seek qualified clinical assessment.</p>
+    {% else %}
     <p style="color: #fde68a; margin-bottom: 12px;">Confidence is too low to make a reliable prediction. Please try a clearer, better-lit photo.</p>
+    {% endif %}
 
     {% else %}
     <div class="meta-grid">
@@ -216,8 +222,8 @@ def index():
             create_report(image_path, result, quality, report_path)
             report_name = report_path.name
 
-            if result["status"] == "demo":
-                formatted_confidence = "Unavailable (demo mode)"
+            if result["status"] == "demo" or result.get("confidence") is None:
+                formatted_confidence = "Unavailable"
             else:
                 formatted_confidence = f"{result['confidence']:.1%}"
 
@@ -256,7 +262,9 @@ def api_predict():
         "label": result["label"],
         "raw_class": result["raw_class"],
         "confidence": (
-            f"{result['confidence']:.1%}" if result["status"] != "demo" else "Unavailable"
+            f"{result['confidence']:.1%}"
+            if result["status"] != "demo" and result.get("confidence") is not None
+            else "Unavailable"
         ),
         "disease_description": disease_info.get("description", ""),
         "severity": disease_info.get("severity", ""),

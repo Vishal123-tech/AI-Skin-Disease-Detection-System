@@ -10,10 +10,14 @@ Feedback is written locally to `feedback/feedback.jsonl`, and the submitted
 image is copied to `feedback/images/` with a random identifier. The folder is
 ignored by Git so images are not pushed to GitHub, Hugging Face, or Render.
 
-The interface also has a consent checkbox. If Google Drive is configured, the
-same feedback image and metadata are uploaded to the configured private Drive
-folder. If Drive is unavailable, the local copy is retained and the user sees
-a status message.
+The interface requires consent before storing an image. The current save path
+is local only; the optional Google Drive helpers are not connected to it.
+
+One-click feedback training is paused following a regression: the active
+four-class checkpoint had been trained with one feedback image and no replay
+data, and predicted Eczema on every image in a 79-image local validation split.
+The status button no longer trains or overwrites weights. Previously stored
+images, weights, and training history are preserved.
 
 This is a collection step, not automatic learning. Before retraining, review
 the records, remove incorrect labels, confirm consent and licensing, and keep

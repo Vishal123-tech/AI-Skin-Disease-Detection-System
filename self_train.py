@@ -1,9 +1,7 @@
-"""self_train.py — Continuous Self-Training Engine from User Feedback
-───────────────────────────────────────────────────────────────────────
-Ingests confirmed feedback from `feedback/feedback.jsonl`, pairs it with
-baseline reference data (experience replay) to prevent catastrophic forgetting,
-fine-tunes the MobileNetV2 classifier head with PyTorch, backs up the previous
-model, and outputs an updated model artifact.
+"""Feedback statistics and a fail-closed guard against unsafe model updates.
+
+One-click training is suspended after the one-image training regression.
+Use the supervised, separate-candidate workflow in docs/FEEDBACK_LOOP.md.
 """
 
 from __future__ import annotations
@@ -176,221 +174,25 @@ def train_on_feedback(
     batch_size: int = 4,
     learning_rate: float = 2e-4,
 ) -> dict:
-    """Execute continuous learning fine-tuning."""
-    usable = load_usable_feedback(include_already_learned=True)
-    if len(usable) < min_samples:
-        return {
-            "success": False,
-            "message": f"Insufficient confirmed feedback. Need at least {min_samples} samples, found {len(usable)}.",
-            "feedback_count": len(usable),
-        }
+    """Keep feedback collection separate from active-model deployment.
 
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
-    from torchvision import models, transforms
-    from torch.utils.data import Dataset, DataLoader
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    # Determine class set
-    existing_labels = []
-    if LABELS_PATH.exists():
-        existing_labels = [
-            l.strip() for l in LABELS_PATH.read_text(encoding="utf-8").splitlines() if l.strip()
-        ]
-    active_labels = list(dict.fromkeys(existing_labels + CANONICAL_LABELS))
-
-    # Add any new labels from feedback
-    for item in usable:
-        if item["label"] not in active_labels:
-            active_labels.append(item["label"])
-
-    label_to_idx = {name: idx for idx, name in enumerate(active_labels)}
-
-    # Build dataset pairs: (path, class_idx)
-    data_pairs: list[tuple[str, int]] = []
-    feedback_ids_trained: list[str] = []
-
-    for item in usable:
-        data_pairs.append((item["image_path"], label_to_idx[item["label"]]))
-        feedback_ids_trained.append(item["id"])
-
-    # Blend experience replay samples
-    replay_samples = collect_replay_samples(active_labels, max_per_class=10)
-    for path, c_name in replay_samples:
-        if c_name in label_to_idx and Path(path).exists():
-            data_pairs.append((path, label_to_idx[c_name]))
-
-    if not data_pairs:
-        return {"success": False, "message": "No valid training images found on disk."}
-
-    print(f"Self-training with {len(usable)} feedback images + {len(replay_samples)} replay images.")
-    print(f"Classes ({len(active_labels)}): {active_labels}")
-
-    # Dataset definition
-    class SkinDataset(Dataset):
-        def __init__(self, pairs: list[tuple[str, int]], transform=None):
-            self.pairs = pairs
-            self.transform = transform
-
-        def __len__(self):
-            return len(self.pairs)
-
-        def __getitem__(self, idx):
-            path, label_idx = self.pairs[idx]
-            try:
-                img = Image.open(path).convert("RGB")
-            except Exception:
-                img = Image.new("RGB", (224, 224), color=(128, 128, 128))
-            if self.transform:
-                img = self.transform(img)
-            return img, label_idx
-
-    train_transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.RandomResizedCrop(224, scale=(0.85, 1.0)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(12),
-        transforms.ColorJitter(brightness=0.1, contrast=0.1),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-    ])
-
-    val_transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-    ])
-
-    # Train / Val Split (80 / 20)
-    np.random.seed(42)
-    indices = np.random.permutation(len(data_pairs))
-    split_idx = max(1, int(len(data_pairs) * 0.8))
-    train_indices = indices[:split_idx]
-    val_indices = indices[split_idx:] if split_idx < len(data_pairs) else indices[:1]
-
-    train_set = SkinDataset([data_pairs[i] for i in train_indices], transform=train_transform)
-    val_set = SkinDataset([data_pairs[i] for i in val_indices], transform=val_transform)
-
-    train_loader = DataLoader(train_set, batch_size=min(batch_size, len(train_set)), shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=min(batch_size, len(val_set)), shuffle=False)
-
-    # Initialize MobileNetV2
-    model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT)
-
-    # Freeze earlier layers, fine-tune head
-    for param in model.parameters():
-        param.requires_grad = False
-
-    num_features = model.classifier[1].in_features
-    model.classifier[1] = nn.Sequential(
-        nn.Dropout(0.3),
-        nn.Linear(num_features, len(active_labels)),
-    )
-
-    # If existing PyTorch model exists, load compatible weights
-    if MODEL_PT_PATH.exists():
-        try:
-            chk = torch.load(MODEL_PT_PATH, map_location=device)
-            # Only load matching classifier shape if classes count matches
-            if chk.get("classifier.1.1.weight") is not None and chk["classifier.1.1.weight"].shape[0] == len(active_labels):
-                model.load_state_dict(chk, strict=False)
-                print("Loaded warm-start weights from existing skin_model.pt")
-        except Exception as exc:
-            print(f"Could not load previous checkpoint: {exc}")
-
-    model = model.to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.AdamW(model.classifier[1].parameters(), lr=learning_rate, weight_decay=1e-3)
-
-    print(f"Starting self-training for {epochs} epochs on device: {device}...")
-    best_loss = float("inf")
-    final_acc = 0.0
-
-    for epoch in range(epochs):
-        model.train()
-        running_loss = 0.0
-        corrects = 0
-        total = 0
-
-        for inputs, targets in train_loader:
-            inputs = inputs.to(device)
-            targets = targets.to(device)
-            optimizer.zero_grad()
-
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
-
-            running_loss += loss.item() * inputs.size(0)
-            _, preds = torch.max(outputs, 1)
-            corrects += torch.sum(preds == targets).item()
-            total += inputs.size(0)
-
-        epoch_loss = running_loss / max(total, 1)
-        epoch_acc = corrects / max(total, 1)
-
-        # Validation
-        model.eval()
-        val_corrects = 0
-        val_total = 0
-        with torch.no_grad():
-            for v_in, v_tgt in val_loader:
-                v_in = v_in.to(device)
-                v_tgt = v_tgt.to(device)
-                v_out = model(v_in)
-                _, v_pred = torch.max(v_out, 1)
-                val_corrects += torch.sum(v_pred == v_tgt).item()
-                val_total += v_in.size(0)
-
-        val_acc = val_corrects / max(val_total, 1)
-        final_acc = val_acc
-        print(f"Epoch {epoch+1}/{epochs} - Train Loss: {epoch_loss:.4f}, Train Acc: {epoch_acc:.1%}, Val Acc: {val_acc:.1%}")
-
-    # Backup existing models
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_file = None
-    if MODEL_PT_PATH.exists():
-        backup_file = BACKUP_DIR / f"skin_model_{stamp}.pt"
-        shutil.copy2(MODEL_PT_PATH, backup_file)
-    tflite_path = MODELS_DIR / "skin_model.tflite"
-    if tflite_path.exists():
-        shutil.copy2(tflite_path, BACKUP_DIR / f"skin_model_{stamp}.tflite")
-
-    # Save new PyTorch model
-    torch.save(model.state_dict(), MODEL_PT_PATH)
-    LABELS_PATH.write_text("\n".join(active_labels), encoding="utf-8")
-
-    # Update metadata
-    meta = {
-        "source": "Continuous Self-Training from User Feedback",
-        "architecture": "MobileNetV2 fine-tuned",
-        "last_trained": datetime.now(timezone.utc).isoformat(),
-        "classes": active_labels,
-        "feedback_samples_used": len(usable),
-        "replay_samples_used": len(replay_samples),
-        "validation_accuracy": round(final_acc, 4),
-        "backup_path": str(backup_file) if backup_file else None,
-    }
-    METADATA_PATH.write_text(json.dumps(meta, indent=2), encoding="utf-8")
-
-    # Record learned sample IDs
-    mark_learned_ids(feedback_ids_trained)
-
-    print(f"Self-training complete! Saved to {MODEL_PT_PATH}")
+    The previous one-click trainer could initialize a new classifier on one
+    user-labelled example, validate on that same example, and overwrite the
+    active checkpoint. Do not reactivate it by merely increasing min_samples.
+    Use reviewed labels, original training data, patient-disjoint validation
+    and a separately evaluated candidate via the offline training workflow.
+    """
     return {
-        "success": True,
-        "message": f"Successfully fine-tuned model on {len(usable)} feedback images + {len(replay_samples)} replay samples.",
-        "classes": active_labels,
-        "feedback_count": len(usable),
-        "replay_count": len(replay_samples),
-        "val_accuracy": final_acc,
-        "backup_path": str(backup_file) if backup_file else None,
-        "timestamp": meta["last_trained"],
+        "success": False,
+        "requires_review": True,
+        "feedback_count": len(load_usable_feedback()),
+        "message": (
+            "Automatic feedback training and activation are paused after a model "
+            "regression. Feedback is still saved. Review the labels, train a "
+            "separate candidate with the original dataset, and evaluate every "
+            "class on independent patients before replacing the active model. "
+            "See docs/FEEDBACK_LOOP.md."
+        ),
     }
 
 

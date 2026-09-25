@@ -7,6 +7,7 @@ uploads/
 reports/
 instance/
 work/
+tmp/
 outputs/
 output/
 feedback/

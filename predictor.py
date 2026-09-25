@@ -12,6 +12,7 @@ Non-skin images (tables, fans, food, etc.) are rejected before classification.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -496,7 +497,7 @@ class SkinPredictor:
         self.acne_focus = str(os.environ.get("ACNE_FOCUS_MODE", "0")).lower() in {
             "1", "true", "yes", "on"
         }
-        self.acne_priority = str(os.environ.get("ACNE_PRIORITY_MODE", "1")).lower() in {
+        self.acne_priority = str(os.environ.get("ACNE_PRIORITY_MODE", "0")).lower() in {
             "1", "true", "yes", "on"
         }
         # Keep the former dermoscopic model as a second local expert. The
@@ -600,12 +601,40 @@ class SkinPredictor:
             self._load_acne_model()
 
     # ─────────────────────────────────────────────────────────────────────────
+    def _load_runtime_selection(self) -> str:
+        """Pin the deployed artifact independently of feedback-training metadata.
+
+        A mismatched hash or label order is a configuration error, not a reason
+        to silently serve another checkpoint. Existing unpinned projects keep
+        their previous automatic backend selection.
+        """
+        path = self.model_path.with_suffix(".runtime.json")
+        if not path.exists():
+            return "auto"
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        if manifest.get("backend") != "tflite":
+            raise ValueError("Unsupported pinned model backend")
+        digest = hashlib.sha256(self.model_path.read_bytes()).hexdigest()
+        if digest != manifest.get("sha256"):
+            raise ValueError("Pinned model checksum mismatch; review the model before activation")
+        if self.labels != manifest.get("class_names"):
+            raise ValueError("Pinned model label order mismatch")
+        mode = manifest.get("input_preprocessing")
+        if mode not in {"raw_0_255", "zero_one", "minus_one_to_one"}:
+            raise ValueError("Pinned model preprocessing is missing or invalid")
+        self.preprocess_mode = mode
+        if manifest.get("acne_crosscheck") is False:
+            self.acne_priority = False
+        return "tflite"
+
     def _load_local_model(self) -> None:
-        """Try PyTorch → TFLite → give up."""
+        """Use a pinned deployment when present; otherwise try PyTorch/TFLite."""
+        selected_backend = self._load_runtime_selection()
+        self.backend = None
         pt_path = self.model_path.with_suffix(".pt")
 
         # PyTorch
-        if pt_path.exists():
+        if pt_path.exists() and selected_backend != "tflite":
             try:
                 import torch
                 import torch.nn as nn
@@ -1126,14 +1155,63 @@ RULES:
         }
 
     def _predict_local(self, image_path: str) -> dict:
-        """Local model prediction with skin gate + entropy-based rejection."""
+        """Cross-check acne without allowing the specialist to override other diseases."""
 
-        if self.acne_interpreter is not None and (self.acne_focus or self.acne_priority):
-            acne_result = self._predict_acne_local(image_path)
-            # Acne gets first priority. If the focused model says that the
-            # image is not acne, continue to the broader disease experts.
-            if self.acne_focus or acne_result["category"] in {"lesion", "non_skin"}:
-                return acne_result
+        # Preserve the explicitly requested binary-only demo mode.
+        if self.acne_interpreter is not None and self.acne_focus:
+            return self._predict_acne_local(image_path)
+
+        result = self._predict_broad_local(image_path)
+        if (self.acne_interpreter is None or not self.acne_priority
+                or result["category"] == "non_skin"):
+            return result
+
+        acne_result = self._predict_acne_local(image_path)
+        broad_is_acne = result["raw_class"].lower().replace("_", " ").strip() in {
+            "acne", "acne vulgaris"
+        }
+        acne_positive = acne_result["category"] == "lesion"
+        acne_negative = acne_result["category"] == "non_acne"
+        disagrees = (acne_positive and not broad_is_acne) or (acne_negative and broad_is_acne)
+        if not disagrees:
+            # Agreement does not justify raising or averaging uncalibrated scores.
+            return result
+
+        assessments = [
+            {"model": result["model_used"], "label": result["raw_class"],
+             "score": result["confidence"]},
+            {"model": "focused acne model", "label": acne_result["raw_class"],
+             "score": acne_result["confidence"]},
+        ]
+        details = "; ".join(
+            f"{item['model']}: {item['label']} (model score {item['score']:.1%})"
+            for item in assessments
+        )
+        return {
+            **result,
+            "category": "uncertain",
+            "raw_class": "uncertain",
+            "label": "Uncertain — Models disagree; no condition confirmed",
+            "confidence": None,
+            "uncertainty_reason": "model_disagreement",
+            "probabilities": {},
+            "top3": [],
+            "model_assessments": assessments,
+            "model_used": f"{result['model_used']} + focused acne cross-check",
+            "disease_info": {
+                "description": (
+                    "The acne specialist and broader classifier disagree. "
+                    "Their scores are separate model outputs, not a combined diagnosis."
+                ),
+                "severity": "No condition confirmed; seek qualified clinical assessment",
+                "emoji": "❓",
+                "category": "uncertain",
+            },
+            "notes": f"{result.get('notes', '')} | Model disagreement: {details}",
+        }
+
+    def _predict_broad_local(self, image_path: str) -> dict:
+        """Broader disease prediction with the existing skin gate and rejection rules."""
 
         # ── Gate 1: trained skin/non-skin model ──────────────────────────────
         trained_gate = self._run_skin_gate(image_path)
@@ -1237,13 +1315,14 @@ RULES:
             info = {
                 "description": (
                     "The model could not confidently identify a skin condition in this image. "
-                    "Please try a closer, clearer, better-lit photo."
+                    "This may reflect limited training coverage, not poor image quality. "
+                    "No condition is confirmed; seek qualified clinical assessment."
                 ),
-                "severity": "Try a better-quality skin photo",
+                "severity": "No condition confirmed; seek qualified clinical assessment",
                 "emoji": "❓",
                 "category": "uncertain",
             }
-            label = f"❓ Uncertain — Low Confidence ({confidence:.1%}) — Please try a clearer photo"
+            label = f"❓ Uncertain — Low model confidence ({confidence:.1%}); no condition confirmed"
 
         elif "non skin" in norm or "other" in norm or "background" in norm:
             category = "non_skin"

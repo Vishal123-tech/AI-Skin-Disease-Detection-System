@@ -1,0 +1,48 @@
+/* Global tokens follow Gradio's actual theme selector, not the OS preference.
+   Injected through head so Gradio cannot scope :root/body below its container. */
+:root {
+  color-scheme: light;
+  --da-bg:#f6f7f9; --da-panel:#ffffff; --da-text:#17212f;
+  --da-secondary:#445267; --da-muted:#56657a;
+  --da-border:#d7dde5; --da-control-border:#a1adbd; --da-inset:#edf1f5;
+  --da-warn-bg:#fff3e8; --da-warn-text:#8b3d0d; --da-warn-border:#ebc7a8;
+  --da-neutral-bg:#e4f3ef; --da-brand:#08786e;
+}
+.dark {
+  color-scheme: dark;
+  --da-bg:#101214; --da-panel:#191c20; --da-text:#f1f3f5;
+  --da-secondary:#b9c2cd; --da-muted:#a3afbf;
+  --da-border:#34383f; --da-control-border:#535a65; --da-inset:#13161a;
+  --da-warn-bg:#242019; --da-warn-text:#ffc18b; --da-warn-border:#59422e;
+  --da-neutral-bg:#1b3231; --da-brand:#72cbbf;
+}
+html, body, gradio-app { background:var(--da-bg) !important; color:var(--da-text) !important; }
+/* Matching compact drawers; leave the main page width unchanged. */
+[role="dialog"][aria-label="Settings"] .api-docs-wrap,
+[role="dialog"][aria-label="Use via API"] .api-docs-wrap {
+  width:560px !important;
+  max-width:100% !important;
+  min-width:0 !important;
+}
+[role="dialog"][aria-label="Use via API"] .banner-wrap h2 {
+  flex-wrap:wrap;
+  gap:10px;
+  padding-right:32px;
+}
+[role="dialog"][aria-label="Use via API"] .banner-wrap .title {
+  display:block;
+  flex:1 1 220px;
+  min-width:0;
+}
+[role="dialog"][aria-label="Use via API"] .banner-wrap .url {
+  display:block;
+  font-size:14px;
+  overflow-wrap:anywhere;
+}
+[role="dialog"][aria-label="Use via API"] .banner-wrap .counts {
+  display:flex;
+  flex:1 1 100%;
+  flex-wrap:wrap;
+  gap:8px;
+  font-size:14px;
+}
