@@ -277,7 +277,9 @@ The checked-in `render.yaml` describes an older Python-runtime setup. It does no
 
 The README metadata selects Gradio, Python 3.12, and `gradio_app.py`. The additional inference dependencies are in `requirements-space.txt`. A Gradio Space installs its root `requirements.txt`, so merely uploading `requirements-space.txt` is insufficient.
 
-Prepare a separate Space deployment folder: combine the base requirements with the extra entries in `requirements-space.txt` into its root `requirements.txt`, removing the `-r requirements.txt` include to avoid recursion. Include the app modules and matching model files. Exclude credentials, feedback images, training datasets, and generated reports. Authenticated deployment and build verification remain pending; no verified Hugging Face demo URL is available yet.
+The allowlisted `scripts/deploy_hf_space.py --repo OWNER/SPACE` helper combines the base and Space requirements without recursion and uploads only application assets, documentation, and bundled inference models. It excludes credentials, feedback images, datasets, and generated reports.
+
+On **25 September 2026**, authenticated creation of `Raone320/SkinScanix` was rejected with HTTP 402: Hugging Face required a PRO subscription for Gradio hosting on CPU Basic. No Space was created, no files were uploaded, and no subscription was purchased. Hugging Face deployment remains pending account eligibility; there is no verified Hugging Face demo URL. A static Space alone cannot run this Python inference application.
 
 ## Current status
 
@@ -287,7 +289,7 @@ Prepare a separate Space deployment folder: combine the base requirements with t
 | Professional PDF report | Implemented; live generation verified |
 | Feedback and manual retraining | Experimental; needs reviewed data and independent evaluation |
 | Raspberry Pi capture and Flask upload | Code included; hardware trial pending |
-| Hugging Face deployment | Configuration prepared; authenticated deployment pending |
+| Hugging Face deployment | Prepared; creation blocked by account subscription requirement (HTTP 402) |
 | Durable cloud feedback storage | Not connected to the current feedback save path |
 | Disease accuracy and regional validation | More labelled data and independent testing required |
 

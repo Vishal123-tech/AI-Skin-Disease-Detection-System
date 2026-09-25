@@ -1,13 +1,15 @@
 """Publish only explicitly listed application assets, never user images or secrets.
 
 Uses the existing Hugging Face login. Run with --repo OWNER/SPACE.
-Creates a free CPU Gradio Space if missing; does not change existing hardware.
+Creates a default CPU Gradio Space if the account is eligible; does not change
+existing hardware, purchase a subscription, or change billing.
 """
 import argparse
 import json
 from pathlib import Path
 
 from huggingface_hub import CommitOperationAdd, HfApi
+from huggingface_hub.errors import HfHubHTTPError
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = [
@@ -44,7 +46,13 @@ def main():
     if args.dry_run:
         return
     api = HfApi()
-    api.create_repo(args.repo, repo_type="space", space_sdk="gradio", private=False, exist_ok=True)
+    try:
+        api.create_repo(args.repo, repo_type="space", space_sdk="gradio", private=False, exist_ok=True)
+    except HfHubHTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 402:
+            raise SystemExit("Hugging Face requires a paid subscription for this Space. "
+                             "No files uploaded and no billing changes made.") from None
+        raise
     operations = [CommitOperationAdd(path_in_repo=name, path_or_fileobj=ROOT / name) for name in FILES]
     operations.append(CommitOperationAdd(path_in_repo="requirements.txt", path_or_fileobj=requirements.encode()))
     info = api.create_commit(args.repo, repo_type="space", operations=operations,
