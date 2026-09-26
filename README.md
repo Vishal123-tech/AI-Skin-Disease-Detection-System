@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="static/skinscanix-logo.png" alt="SkinScanix — AI Skin Disease Detection" width="240">
+  <img src="static/skinscanix-logo.png" alt="SkinScanix —  AI Skin Disease Detection" width="240">
 </p>
 
 <h1 align="center">SkinScanix</h1>
