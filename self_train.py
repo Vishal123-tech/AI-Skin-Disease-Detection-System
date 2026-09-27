@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 import shutil
 import sys
-from typing import Optional
+from typing  import Optional
 
 import numpy as np
 from PIL import Image
