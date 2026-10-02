@@ -14,7 +14,7 @@ from pathlib import Path
 from flask import Flask, request, render_template_string, send_from_directory
 from werkzeug.utils import secure_filename
 
-from config import (
+from config  import (
     ACNE_LABELS_PATH,
     ACNE_MODEL_PATH,
     GATE_LABELS_PATH,
