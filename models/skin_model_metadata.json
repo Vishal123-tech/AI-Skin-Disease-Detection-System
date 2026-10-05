@@ -1,15 +1,31 @@
 {
-  "source": "Continuous Self-Training from User Feedback",
-  "architecture": "MobileNetV2 fine-tuned",
-  "last_trained": "2026-09-09T13:46:12.732322+00:00",
-  "classes": [
+  "architecture": "MobileNetV2 float32 ONNX export",
+  "source": "Provisional Mendeley + SCIN local research experiment",
+  "class_names": [
     "Acne Vulgaris",
     "Eczema",
     "Fungal Infection",
-    "Psoriasis"
+    "Psoriasis",
+    "Normal Skin"
   ],
-  "feedback_samples_used": 1,
-  "replay_samples_used": 0,
-  "validation_accuracy": 1.0,
-  "backup_path": "C:\\Users\\vy355\\Documents\\Codex\\2026-08-19\\8-ai-skin-disease-detection-hardware\\models\\backups\\skin_model_20260909_191612.pt"
+  "input_preprocessing": "imagenet_rgb_exif_resize256_centercrop224",
+  "training": "Frozen cached ImageNet features; class/source/group-balanced head training",
+  "sha256": "4beae0218b285a1c89898faf60526908e0fa025a4c0dec1ad84b0e9fb7d4089b",
+  "selected_epoch": 25,
+  "approved_for_deployment": false,
+  "clinical_verification": false,
+  "source_checkpoint_sha256": "5639a917d10f1df1e23c44d301aa5f3389b7855e1c654a9a3fd86cfe9f5c39fc",
+  "deployment_authorization": "User requested public educational deployment on 2026-10-03",
+  "data_permission": "User confirmed permission on 2026-10-03; not independently verified",
+  "release_status": "User-authorized experimental release, not clinical approval",
+  "internal_pipeline_test": {
+    "correct": 248,
+    "images": 347,
+    "normal_correct": 52,
+    "normal_images": 75,
+    "fungal_correct": 0,
+    "fungal_images": 7,
+    "psoriasis_correct": 0,
+    "psoriasis_images": 6
+  }
 }

@@ -21,7 +21,7 @@ from typing import Any, Optional
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 # ─── Comprehensive Disease Taxonomy (30+ conditions) ─────────────────────────
 
@@ -460,6 +460,24 @@ def looks_like_document(image_path: str) -> bool:
 
 # ─── Main Predictor ───────────────────────────────────────────────────────────
 
+def prepare_onnx_image(image_path: str) -> np.ndarray:
+    """Match the evaluated torchvision PIL pipeline without importing Torch."""
+    with Image.open(image_path) as source:
+        image = ImageOps.exif_transpose(source).convert("RGB")
+    width, height = image.size
+    if width <= height:
+        resized = (256, int(256 * height / width))
+    else:
+        resized = (int(256 * width / height), 256)
+    image = image.resize(resized, Image.Resampling.BILINEAR)
+    left, top = round((resized[0] - 224) / 2), round((resized[1] - 224) / 2)
+    image = image.crop((left, top, left + 224, top + 224))
+    tensor = np.asarray(image, dtype=np.float32).transpose(2, 0, 1) / np.float32(255.)
+    mean = np.array([.485, .456, .406], dtype=np.float32)[:, None, None]
+    std = np.array([.229, .224, .225], dtype=np.float32)[:, None, None]
+    return np.ascontiguousarray(((tensor - mean) / std)[None])
+
+
 class SkinPredictor:
     """
     Two-stage skin disease predictor.
@@ -514,6 +532,7 @@ class SkinPredictor:
         self.legacy_interpreter = None
         self.gate_interpreter = None
         self.pt_model = None
+        self.onnx_session = None
         self.transform = None
         self.device = None
         self.labels: list[str] = []
@@ -581,7 +600,11 @@ class SkinPredictor:
             ]
 
         # ── 1. Try Gemini Vision API ──────────────────────────────────────────
-        api_key = gemini_api_key or os.environ.get("GEMINI_API_KEY", "")
+        # An explicit deployment pin can prohibit remote inference and acne
+        # overrides, preserving the exact pipeline evaluated before release.
+        self._load_runtime_selection()
+        pinned_local = getattr(self, "runtime_manifest", {}).get("force_local") is True
+        api_key = "" if pinned_local else (gemini_api_key or os.environ.get("GEMINI_API_KEY", ""))
         if api_key:
             try:
                 import google.generativeai as genai  # type: ignore
@@ -612,26 +635,48 @@ class SkinPredictor:
         if not path.exists():
             return "auto"
         manifest = json.loads(path.read_text(encoding="utf-8"))
-        if manifest.get("backend") != "tflite":
+        backend = manifest.get("backend")
+        if backend not in {"tflite", "onnx"}:
             raise ValueError("Unsupported pinned model backend")
-        digest = hashlib.sha256(self.model_path.read_bytes()).hexdigest()
+        artifact = self.model_path.with_suffix(".onnx") if backend == "onnx" else self.model_path
+        digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
         if digest != manifest.get("sha256"):
             raise ValueError("Pinned model checksum mismatch; review the model before activation")
         if self.labels != manifest.get("class_names"):
             raise ValueError("Pinned model label order mismatch")
         mode = manifest.get("input_preprocessing")
-        if mode not in {"raw_0_255", "zero_one", "minus_one_to_one"}:
+        valid_modes = ({"imagenet_rgb_exif_resize256_centercrop224"} if backend == "onnx"
+                       else {"raw_0_255", "zero_one", "minus_one_to_one"})
+        if mode not in valid_modes:
             raise ValueError("Pinned model preprocessing is missing or invalid")
         self.preprocess_mode = mode
         if manifest.get("acne_crosscheck") is False:
             self.acne_priority = False
-        return "tflite"
+        if manifest.get("acne_focus") is False:
+            self.acne_focus = False
+        self.runtime_manifest = manifest
+        return backend
 
     def _load_local_model(self) -> None:
         """Use a pinned deployment when present; otherwise try PyTorch/TFLite."""
         selected_backend = self._load_runtime_selection()
         self.backend = None
         pt_path = self.model_path.with_suffix(".pt")
+
+        if selected_backend == "onnx":
+            import onnxruntime as ort
+            options = ort.SessionOptions()
+            options.intra_op_num_threads = 2
+            options.inter_op_num_threads = 1
+            self.onnx_session = ort.InferenceSession(
+                str(self.model_path.with_suffix(".onnx")), sess_options=options,
+                providers=["CPUExecutionProvider"],
+            )
+            if self.onnx_session.get_outputs()[0].shape[-1] != len(self.labels):
+                raise ValueError("Pinned ONNX output/label mismatch")
+            self.backend = "onnx"
+            print(f"Pinned ONNX model loaded: {self.runtime_manifest['sha256']} ({len(self.labels)} classes)")
+            return
 
         # PyTorch
         if pt_path.exists() and selected_backend != "tflite":
@@ -966,6 +1011,13 @@ RULES:
     # ─────────────────────────────────────────────────────────────────────────
     def _run_local_model(self, image_path: str) -> np.ndarray:
         """Run the local model and return a probability array."""
+        if self.backend == "onnx":
+            tensor = prepare_onnx_image(image_path)
+            output = self.onnx_session.run(None, {"image": tensor})[0][0]
+            if (output.shape != (len(self.labels),) or not np.all(np.isfinite(output))
+                    or np.any(output < 0) or not np.isclose(output.sum(), 1., atol=1e-4)):
+                raise ValueError("Invalid ONNX model probabilities")
+            return output
         if self.backend == "pytorch" and self.pt_model is not None:
             image = Image.open(image_path).convert("RGB")
             import torch
@@ -1332,7 +1384,7 @@ RULES:
         elif "normal" in norm or "healthy" in norm:
             category = "normal"
             info = DISEASE_INFO.get("Normal_Skin", {})
-            label = f"✅ Normal Healthy Skin — No Lesion Detected"
+            label = "Normal Skin pattern predicted — healthy skin is not confirmed"
 
         else:
             info = _get_disease_info(raw_label)

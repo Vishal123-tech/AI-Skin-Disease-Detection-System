@@ -1,10 +1,18 @@
 {
-  "backend": "tflite",
-  "source": "Original Google SCIN baseline; local rollback after feedback-model regression",
-  "sha256": "3d27f2e4d0fc7f123a455d432a5d8087d6d7028616a35174b4d052f8b4f51962",
-  "input_preprocessing": "raw_0_255",
-  "embedded_preprocessing": "Rescaling(1/127.5, offset=-1)",
-  "class_names": ["Acne Vulgaris", "Eczema", "Fungal Infection", "Psoriasis"],
+  "backend": "onnx",
+  "sha256": "4beae0218b285a1c89898faf60526908e0fa025a4c0dec1ad84b0e9fb7d4089b",
+  "class_names": [
+    "Acne Vulgaris",
+    "Eczema",
+    "Fungal Infection",
+    "Psoriasis",
+    "Normal Skin"
+  ],
+  "input_preprocessing": "imagenet_rgb_exif_resize256_centercrop224",
+  "force_local": true,
+  "acne_focus": false,
   "acne_crosscheck": false,
-  "scope": "Educational baseline only. Weak psoriasis performance; no clinical accuracy claim."
+  "source_checkpoint_sha256": "5639a917d10f1df1e23c44d301aa5f3389b7855e1c654a9a3fd86cfe9f5c39fc",
+  "release": "normal-skin-experimental-20261003",
+  "scope": "Educational experiment; not clinically validated"
 }
