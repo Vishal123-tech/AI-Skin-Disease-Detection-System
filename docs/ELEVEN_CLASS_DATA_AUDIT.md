@@ -1,6 +1,6 @@
 # Eleven-condition improvement audit — 21 September 2026
 
-No production model, website interface, or live deployment was changed by this
+No production model, website interface, or live deployment was  changed by this
 audit. The separate four-condition candidate is not an approved replacement.
 
 ## Complete prediction pipeline, not just classifier scores
