@@ -1,4 +1,4 @@
-"""Professional PDF report generation for the skin-screening prototype.
+ """Professional PDF report generation for the skin-screening prototype.
 
 This module is intentionally presentation-only. It consumes the existing
 prediction and image-quality values without changing model decisions,
