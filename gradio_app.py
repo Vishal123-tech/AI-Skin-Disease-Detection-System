@@ -45,17 +45,28 @@ def analyze(image_path):
     if not image_path:
         return "Please upload a skin image.", None, None, gr.update(visible=False)
 
-    image_path = Path(image_path)
-    quality = check_image(str(image_path))
-    result = predictor.predict(str(image_path))
+    try:
+        image_path = Path(image_path)
+        quality = check_image(str(image_path))
+        result = predictor.predict(str(image_path))
 
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_path = REPORT_DIR / f"{stamp}_report.pdf"
-    create_report(image_path, result, quality, report_path)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_path = REPORT_DIR / f"{stamp}_report.pdf"
+        create_report(image_path, result, quality, report_path)
 
-    text = render_result(result, quality)
-    feedback_context = {"image_path": str(image_path), "result": result}
-    return text, str(report_path), feedback_context, gr.update(visible=True)
+        text = render_result(result, quality)
+        feedback_context = {"image_path": str(image_path), "result": result}
+        return text, str(report_path), feedback_context, gr.update(visible=True)
+    except Exception as exc:
+        # Returning a clear result prevents the browser from waiting forever
+        # when a malformed upload or server-side inference failure occurs.
+        print(f"Analysis failed: {type(exc).__name__}: {exc}", flush=True)
+        message = (
+            "<section class=\"analysis-card\"><h3>Analysis could not finish</h3>"
+            "<p>Please try another clear image. If this keeps happening, refresh "
+            "the page and try again later.</p></section>"
+        )
+        return message, None, None, gr.update(visible=False)
 
 
 def submit_feedback(feedback_context, rating, correct_label, comment, consent):
@@ -105,7 +116,7 @@ def run_self_training_ui() -> str:
         return f"❌ **Error during self-training:** {exc}"
 
 
-UI_LAUNCH_KWARGS = {"css": CSS, "head": THEME_HEAD, "theme": gr.themes.Base(
+UI_LAUNCH_KWARGS = {"css": CSS, "head": THEME_HEAD, "show_error": True, "theme": gr.themes.Base(
     primary_hue="orange", neutral_hue="slate", font=["system-ui", "sans-serif"]),
     "footer_links": ["api", "settings"]}
 
@@ -181,8 +192,13 @@ with gr.Blocks(title=f"{BRAND_NAME} | AI Skin Disease Detection", analytics_enab
         analyze,
         inputs=image,
         outputs=[result, report_file, feedback_context, feedback_group],
+        queue=False,
     )
-    image.change(reset_analysis, outputs=[result, report_file, feedback_context, feedback_group])
+    image.change(
+        reset_analysis,
+        outputs=[result, report_file, feedback_context, feedback_group],
+        queue=False,
+    )
     feedback_rating.change(
         lambda rating: gr.update(visible=rating == "Wrong"),
         inputs=feedback_rating,
