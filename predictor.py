@@ -773,6 +773,9 @@ class SkinPredictor:
 
     def _load_acne_model(self) -> None:
         """Load the optional focused two-class acne model."""
+        if not (self.acne_focus or self.acne_priority):
+            self.acne_interpreter = None
+            return
         if not self.acne_model_path.exists() or len(self.acne_labels) != 2:
             return
 
@@ -1284,7 +1287,7 @@ RULES:
         # the SCIN expert is weak and the legacy expert is clearly confident.
         # This keeps both taxonomies available without pretending their scores
         # are directly comparable.
-        if self.legacy_interpreter is not None and self.legacy_labels:
+        if confidence < 0.65 and self.legacy_interpreter is not None and self.legacy_labels:
             legacy_probs = self._run_legacy_model(image_path)
             legacy_confidence = float(np.max(legacy_probs))
             if confidence < 0.65 and legacy_confidence >= 0.75:

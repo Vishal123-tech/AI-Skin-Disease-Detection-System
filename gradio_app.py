@@ -1,8 +1,11 @@
 """Simple Gradio UI for the AI Skin Disease Detection prototype."""
 
 import os
-from datetime import datetime
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from threading import Lock
+from time import perf_counter
+from uuid import uuid4
 
 import gradio as gr
 from branding import BRAND_NAME, website_header
@@ -21,6 +24,7 @@ from config import (
 from predictor import  SkinPredictor
 from quality import check_image
 from report import create_report
+from upload_preparation import prepare_upload
 from feedback import (
     available_feedback_labels,
     get_feedback_summary,
@@ -39,34 +43,48 @@ predictor = SkinPredictor(
     gemini_api_key=GEMINI_API_KEY,
 )
 PORT = int(os.environ.get("PORT", 7860))
+ANALYSIS_LOCK = Lock()
 
 
 def analyze(image_path):
     if not image_path:
         return "Please upload a skin image.", None, None, gr.update(visible=False)
-
+    if not ANALYSIS_LOCK.acquire(blocking=False):
+        return "The server is busy. Please try again shortly.", None, None, gr.update(visible=False)
+    started = perf_counter()
+    request_id = uuid4().hex
     try:
+        # preprocess=False avoids Gradio decoding a full-resolution phone image
+        # before our bounded decoder can inspect it.
+        if isinstance(image_path, dict):
+            image_path = image_path.get("path")
         image_path = Path(image_path)
-        quality = check_image(str(image_path))
-        result = predictor.predict(str(image_path))
-
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        report_path = REPORT_DIR / f"{stamp}_report.pdf"
-        create_report(image_path, result, quality, report_path)
+        with TemporaryDirectory(prefix="skinscanix-") as temporary:
+            prepared = prepare_upload(image_path, Path(temporary) / "input.png")
+            print(f"analysis {request_id}: prepared in {perf_counter() - started:.2f}s", flush=True)
+            quality = check_image(str(prepared))
+            result = predictor.predict(str(prepared))
+            print(f"analysis {request_id}: predicted in {perf_counter() - started:.2f}s", flush=True)
+            report_path = REPORT_DIR / f"{request_id}_report.pdf"
+            create_report(prepared, result, quality, report_path)
 
         text = render_result(result, quality)
         feedback_context = {"image_path": str(image_path), "result": result}
         return text, str(report_path), feedback_context, gr.update(visible=True)
     except Exception as exc:
-        # Returning a clear result prevents the browser from waiting forever
-        # when a malformed upload or server-side inference failure occurs.
         print(f"Analysis failed: {type(exc).__name__}: {exc}", flush=True)
+        if isinstance(exc, ValueError):
+            import html
+            return html.escape(str(exc)), None, None, gr.update(visible=False)
         message = (
             "<section class=\"analysis-card\"><h3>Analysis could not finish</h3>"
             "<p>Please try another clear image. If this keeps happening, refresh "
             "the page and try again later.</p></section>"
         )
         return message, None, None, gr.update(visible=False)
+    finally:
+        ANALYSIS_LOCK.release()
+        print(f"analysis {request_id}: finished in {perf_counter() - started:.2f}s", flush=True)
 
 
 def submit_feedback(feedback_context, rating, correct_label, comment, consent):
@@ -116,7 +134,8 @@ def run_self_training_ui() -> str:
         return f"❌ **Error during self-training:** {exc}"
 
 
-UI_LAUNCH_KWARGS = {"css": CSS, "head": THEME_HEAD, "show_error": True, "theme": gr.themes.Base(
+UI_LAUNCH_KWARGS = {"css": CSS, "head": THEME_HEAD, "show_error": False,
+    "max_file_size": "10mb", "theme": gr.themes.Base(
     primary_hue="orange", neutral_hue="slate", font=["system-ui", "sans-serif"]),
     "footer_links": ["api", "settings"]}
 
@@ -192,7 +211,10 @@ with gr.Blocks(title=f"{BRAND_NAME} | AI Skin Disease Detection", analytics_enab
         analyze,
         inputs=image,
         outputs=[result, report_file, feedback_context, feedback_group],
-        queue=False,
+        queue=True,
+        concurrency_limit=1,
+        concurrency_id="skin-analysis",
+        preprocess=False,
     )
     image.change(
         reset_analysis,
@@ -220,6 +242,8 @@ with gr.Blocks(title=f"{BRAND_NAME} | AI Skin Disease Detection", analytics_enab
     gr.HTML(f'<footer class="site-footer"><span><strong>{BRAND_NAME}</strong> · AI Skin Disease Detection</span>'
             '<span>Research & education · Not for medical diagnosis</span></footer>')
 
+
+demo.queue(max_size=3, default_concurrency_limit=1)
 
 if __name__ == "__main__":
     # On cloud platforms (Render, HF Spaces), the platform provides the public URL.
