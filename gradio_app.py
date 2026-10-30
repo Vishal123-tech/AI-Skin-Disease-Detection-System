@@ -46,11 +46,22 @@ PORT = int(os.environ.get("PORT", 7860))
 ANALYSIS_LOCK = Lock()
 
 
+def analysis_stage(message):
+    return (
+        '<section class="analysis-card" role="status" aria-live="polite" aria-atomic="true">'
+        '<p>ANALYSIS IN PROGRESS</p>'
+        f'<h3>{message}</h3>'
+        '<p>Please keep this page open. Your result will appear here.</p></section>'
+    )
+
+
 def analyze(image_path):
     if not image_path:
-        return "Please upload a skin image.", None, None, gr.update(visible=False)
+        yield "Please upload a skin image.", None, None, gr.update(visible=False)
+        return
     if not ANALYSIS_LOCK.acquire(blocking=False):
-        return "The server is busy. Please try again shortly.", None, None, gr.update(visible=False)
+        yield "The server is busy. Please try again shortly.", None, None, gr.update(visible=False)
+        return
     started = perf_counter()
     request_id = uuid4().hex
     try:
@@ -59,29 +70,42 @@ def analyze(image_path):
         if isinstance(image_path, dict):
             image_path = image_path.get("path")
         image_path = Path(image_path)
+        yield analysis_stage("Preparing your photo"), None, None, gr.update(visible=False)
         with TemporaryDirectory(prefix="skinscanix-") as temporary:
             prepared = prepare_upload(image_path, Path(temporary) / "input.png")
             print(f"analysis {request_id}: prepared in {perf_counter() - started:.2f}s", flush=True)
+            yield analysis_stage("Checking image quality"), None, None, gr.update(visible=False)
             quality = check_image(str(prepared))
+            yield analysis_stage("Analysing the skin image"), None, None, gr.update(visible=False)
             result = predictor.predict(str(prepared))
             print(f"analysis {request_id}: predicted in {perf_counter() - started:.2f}s", flush=True)
+            yield analysis_stage("Creating your PDF report"), None, None, gr.update(visible=False)
             report_path = REPORT_DIR / f"{request_id}_report.pdf"
             create_report(prepared, result, quality, report_path)
 
-        text = render_result(result, quality)
+        elapsed = perf_counter() - started
+        completed = (
+            '<div role="status" aria-live="polite" style="font-size:12px;'
+            'line-height:1.5;margin-bottom:8px;color:var(--body-text-color-subdued)">'
+            f'<strong>Analysis complete · {elapsed:.1f}s</strong><br>'
+            'Photo prepared &#10003; &nbsp; Quality checked &#10003; &nbsp; '
+            'Analysed &#10003; &nbsp; PDF created &#10003;</div>'
+        )
+        text = completed + render_result(result, quality)
         feedback_context = {"image_path": str(image_path), "result": result}
-        return text, str(report_path), feedback_context, gr.update(visible=True)
+        yield text, str(report_path), feedback_context, gr.update(visible=True)
     except Exception as exc:
         print(f"Analysis failed: {type(exc).__name__}: {exc}", flush=True)
         if isinstance(exc, ValueError):
             import html
-            return html.escape(str(exc)), None, None, gr.update(visible=False)
+            yield html.escape(str(exc)), None, None, gr.update(visible=False)
+            return
         message = (
             "<section class=\"analysis-card\"><h3>Analysis could not finish</h3>"
             "<p>Please try another clear image. If this keeps happening, refresh "
             "the page and try again later.</p></section>"
         )
-        return message, None, None, gr.update(visible=False)
+        yield message, None, None, gr.update(visible=False)
     finally:
         ANALYSIS_LOCK.release()
         print(f"analysis {request_id}: finished in {perf_counter() - started:.2f}s", flush=True)
@@ -155,7 +179,21 @@ with gr.Blocks(title=f"{BRAND_NAME} | AI Skin Disease Detection", analytics_enab
             '<span><b>2</b> Review the analysis</span><span><b>3</b> Save your report</span></div>')
     with gr.Row(elem_id="workspace"):
         with gr.Column(scale=1, min_width=300):
-            gr.HTML('<div class="section-heading"><h2>Skin image</h2><span>Upload or use your camera</span></div>')
+            gr.HTML('''<div class="section-heading"><h2>Skin image</h2>
+              <button popovertarget="photo-guide" type="button"
+                style="border:0;background:transparent;color:var(--body-text-color-subdued);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline">Photo guide</button></div>
+              <div id="photo-guide" popover style="position:fixed;inset:50% auto auto 50%;transform:translate(-50%,-50%);margin:0;width:min(420px,calc(100vw - 32px));max-height:80dvh;overflow:auto;box-sizing:border-box;padding:24px;border:1px solid var(--border-color-primary);border-radius:16px;background:var(--background-fill-primary);color:var(--body-text-color);box-shadow:0 16px 60px #0006">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:16px">
+                  <h3 style="margin:0">Photo &amp; camera guide</h3>
+                  <button type="button" popovertarget="photo-guide" popovertargetaction="hide" aria-label="Close photo guide"
+                    style="background:transparent;border:0;color:inherit;font-size:24px;cursor:pointer">&#215;</button>
+                </div>
+                <p><strong>Centre the skin area.</strong> Fill most of the frame and leave a little surrounding skin visible.</p>
+                <p><strong>Keep it sharp.</strong> Hold still and move only as close as your camera can focus. Avoid digital zoom and filters.</p>
+                <p><strong>Use even light.</strong> Avoid glare and strong shadows.</p>
+                <p><strong>Capture or upload.</strong> Select the camera icon, or take a photo with your phone and upload it here. Avoid identifiable details where possible.</p>
+                <small>Close with &#215;, Escape, or a click outside this guide.</small>
+              </div>''')
             image = gr.Image(type="filepath", label="Upload skin image", height=350, elem_id="skin-upload")
             gr.Markdown("**For a better photo** · Use even lighting, keep the camera steady, "
                         "and frame the affected area closely. Avoid identifiable details where possible.", elem_id="photo-tips")
@@ -214,6 +252,8 @@ with gr.Blocks(title=f"{BRAND_NAME} | AI Skin Disease Detection", analytics_enab
         queue=True,
         concurrency_limit=1,
         concurrency_id="skin-analysis",
+        show_progress="hidden",
+        stream_every=0.1,
         preprocess=False,
     )
     image.change(
