@@ -22,7 +22,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset, TensorDataset, WeightedRandomSampler
 from torchvision import models, transforms
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 LABELS = ["Acne Vulgaris", "Eczema", "Fungal Infection", "Psoriasis"]
 
 
@@ -233,7 +233,7 @@ def main():
     audit_result = evaluate(model, audit_loader)
     # Same historical examples and label order as the original TFLite baseline.
     from ai_edge_litert.interpreter import Interpreter
-    from predictor import SkinPredictor
+    from skinscanix.predictor import SkinPredictor
     baseline = Interpreter(model_path=str(ROOT / "models/skin_model.tflite"), num_threads=2)
     baseline.allocate_tensors()
     baseline_probs = [SkinPredictor._run_tflite_model(r["path"], baseline, (224, 224), "raw_0_255") for r in audit]

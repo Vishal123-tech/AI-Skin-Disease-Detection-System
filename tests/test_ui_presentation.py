@@ -1,8 +1,8 @@
 """Presentation tests: preserve uncertain scores and escape model text."""
 import unittest
 from copy import deepcopy
-from quality import QualityResult
-from ui_presentation import render_result, EMPTY_RESULT
+from skinscanix.quality import QualityResult
+from skinscanix.ui_presentation import render_result, EMPTY_RESULT
 
 
 class PresentationTests(unittest.TestCase):

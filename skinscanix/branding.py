@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 
 BRAND_NAME = "SkinScanix"
-LOGO_PATH = Path(__file__).resolve().parent / "static" / "skinscanix-logo.png"
+LOGO_PATH = Path(__file__).resolve().parents[1] / "static" / "skinscanix-logo.png"
 
 
 @lru_cache(maxsize=1)

@@ -228,15 +228,15 @@ Gradio server (gradio_app.py)
           |
           +--> bounded queue: one analysis at a time
           |
-          +--> upload_preparation.py: validate dimensions, resize, orient
+          +--> skinscanix/upload_preparation.py: validate dimensions, resize, orient
           |
-          +--> quality.py: image size, sharpness, brightness
+          +--> skinscanix/quality.py: image size, sharpness, brightness
           |
-          +--> predictor.py: local skin checks and model selection
+          +--> skinscanix/predictor.py: local skin checks and model selection
           |       |
           |       +--> non-skin / uncertain / condition assessment
           |
-          +--> report.py: PDF report
+          +--> skinscanix/report.py: PDF report
           |
           v
 Live stage messages -> result + completion time + downloadable PDF
@@ -274,7 +274,7 @@ Gradio and Flask share prediction/report modules but are **different server entr
 | ONNX Runtime | Execute the pinned five-class MobileNetV2 model on CPU |
 | TensorFlow Lite / LiteRT | Execute the skin gate and legacy lesion `.tflite` models |
 | PyTorch and torchvision | MobileNetV2 candidate training and optional checkpoint support |
-| TensorFlow | Optional training/export path in `train.py` and Colab workflows |
+| TensorFlow | Optional training/export path in `skinscanix/train.py` and Colab workflows |
 | OpenCV | Image-quality checks, image heuristics and fallback camera capture |
 | Pillow and NumPy | Image processing and numerical operations |
 | ReportLab | Branded PDF generation |
@@ -292,41 +292,32 @@ The core image classifiers use neural networks/transfer learning, including Mobi
 
 ```text
 SkinScanix/
-├── README.md                       # Current project reference
-├── gradio_app.py                    # Main UI and callbacks
-├── run_local_ui.py                  # Local-only, bundled-model preview
-├── launch_gradio.py                 # Explicit public sharing-tunnel launcher
-├── app.py                          # Separate Flask UI/API
-├── predictor.py                    # Model loading, gates and routing
-├── upload_preparation.py           # Bounded decoding and phone-photo preparation
-├── quality.py                      # Quality measurements
-├── report.py                       # PDF generation
-├── branding.py                     # Brand name and logo handling
-├── ui_presentation.py              # Result rendering, theme/CSS wiring
-├── config.py                       # Paths, .env loading and upload limit
-├── pi_capture.py                   # Camera capture and API upload
-├── feedback.py                     # Feedback image/log storage
-├── review_feedback.py              # Review/export feedback
-├── self_train.py                   # Paused trainer and status helpers
-├── drive_feedback.py               # Optional Drive upload helper
-├── setup_google_drive_oauth.py     # Local OAuth setup helper
-├── train_candidate.py              # Isolated four-condition candidate training
-├── train.py                        # General PyTorch/TensorFlow training paths
-├── train_acne.py                    # Experimental binary acne training
-├── prepare_acne_dataset.py         # Acne dataset preparation
-├── setup_dataset.py                # Dataset scaffolding/sample generation
-├── COLAB_PREPARE_SCIN.ipynb         # SCIN preparation notebook
-├── COLAB_TRAIN_INDIAN_SKIN.ipynb    # Training notebook; name is not regional proof
-├── models/                         # Bundled models, label order and metadata
-├── static/                         # SkinScanix logo and CSS/theme assets
-├── scripts/                        # Audits, candidate evaluation and HF upload
-├── tests/                          # Automated regression tests
-├── docs/                           # Detailed workflows and dated audits
-├── requirements*.txt               # Separate inference/training/storage dependencies
-├── Dockerfile                      # Verified Render container entry point
-├── render.yaml                     # Older Python-runtime deployment blueprint
-└── .dockerignore / .gitignore      # Exclude local data, secrets and generated files
+├── README.md                    # Full project guide
+├── gradio_app.py                # Hosted app launcher (same command)
+├── run_local_ui.py              # Local trial launcher (same command)
+├── skinscanix/                  # Application code and Python utilities
+│   ├── gradio_app.py / app.py   # Gradio UI / separate Flask API
+│   ├── predictor.py            # Model loading and inference routing
+│   ├── config.py / branding.py # Repository paths and brand assets
+│   ├── upload_preparation.py   # Bounded image decoding
+│   ├── quality.py / report.py  # Quality checks and PDF generation
+│   ├── ui_presentation.py      # Results and theme wiring
+│   ├── feedback.py / self_train.py  # Feedback; automatic training paused
+│   ├── train*.py               # Offline training utilities
+│   └── pi_capture.py           # Optional camera/upload client
+├── requirements/               # Deployment, local, training and Drive dependencies
+├── requirements.txt            # Shared base dependencies
+├── models/                     # Models, labels and runtime manifest
+├── static/                     # Logo and CSS assets
+├── scripts/                    # Audits, deployment and HTTP smoke checks
+├── tests/                      # Regression tests
+├── docs/                       # Detailed guides and project presentation
+│   └── notebooks/             # Colab preparation and training notebooks
+├── Dockerfile                  # Render container entry point
+└── render.yaml                 # Older Python-runtime blueprint
 ```
+
+The full README remains here. Python modules are grouped under `skinscanix/` to keep the repository file list compact. Run utility commands **from the repository root** with `python -m skinscanix.<module>`; the two launch commands above remain unchanged.
 
 Local runtime/work directories such as `uploads/`, `reports/`, `feedback/`, `data/`, `work/`, `outputs/` and `output/` are ignored by Git. They are not guaranteed to exist in a fresh clone. Ignoring a folder does not encrypt it or make cloud storage permanent.
 
@@ -351,7 +342,7 @@ Windows PowerShell:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements-space.txt
+python -m pip install -r requirements/requirements-space.txt
 python -m pip install onnxruntime==1.30.0
 python run_local_ui.py --host 127.0.0.1 --port 7860
 ```
@@ -359,7 +350,7 @@ python run_local_ui.py --host 127.0.0.1 --port 7860
 If activation is restricted, use the interpreter directly instead of changing system security settings:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-space.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements/requirements-space.txt
 .\.venv\Scripts\python.exe -m pip install onnxruntime==1.30.0
 .\.venv\Scripts\python.exe run_local_ui.py --host 127.0.0.1 --port 7860
 ```
@@ -368,7 +359,7 @@ Linux:
 
 ```bash
 source .venv/bin/activate
-python -m pip install -r requirements-space.txt
+python -m pip install -r requirements/requirements-space.txt
 python -m pip install onnxruntime==1.30.0
 python run_local_ui.py --host 127.0.0.1 --port 7860
 ```
@@ -381,9 +372,9 @@ For a phone on the same trusted Wi-Fi network, start `python run_local_ui.py --h
 
 Theme previews: `http://127.0.0.1:7860/?__theme=light` and `http://127.0.0.1:7860/?__theme=dark`.
 
-**Do not confuse the launchers:** `launch_gradio.py` explicitly creates a public tunnel. Running `gradio_app.py` directly also requests sharing outside recognized cloud environments. Do not use those launchers for a private local-only test.
+**Do not confuse the launchers:** `skinscanix/launch_gradio.py` explicitly creates a public tunnel. Running `gradio_app.py` directly also requests sharing outside recognized cloud environments. Do not use those launchers for a private local-only test.
 
-The inference requirements include CPU PyTorch/torchvision and LiteRT. The additional ONNX Runtime install is required because `requirements-space.txt` does not currently include it. Full TensorFlow is not needed for the pinned ONNX model. These server wheels are not the Raspberry Pi camera client's installation requirements.
+The inference requirements include CPU PyTorch/torchvision and LiteRT. The additional ONNX Runtime install is required because `requirements/requirements-space.txt` does not currently include it. Full TensorFlow is not needed for the pinned ONNX model. These server wheels are not the Raspberry Pi camera client's installation requirements.
 
 ## 8. Using the website and PDF report
 
@@ -436,7 +427,7 @@ Standard reports use a compact **one-page A4 layout**. Extremely long notes can 
 With the inference environment installed:
 
 ```bash
-python app.py
+python -m skinscanix.app
 ```
 
 The separate Flask page is at **http://127.0.0.1:5000/**.
@@ -490,14 +481,14 @@ Power off the Pi before connecting its camera ribbon. Connect the camera to the 
 3. On the inference computer, start Flask:
 
    ```bash
-   python app.py --host 0.0.0.0 --port 5000
+   python -m skinscanix.app --host 0.0.0.0 --port 5000
    ```
 
 4. Permit the port only on the trusted local network. On the Pi, set the computer's actual LAN address:
 
    ```bash
    export SERVER_URL="http://192.168.1.10:5000/api/predict"
-   python pi_capture.py
+   python -m skinscanix.pi_capture
    ```
 
    Replace `192.168.1.10` with the server's address. `127.0.0.1` on the Pi refers to the Pi itself, not your laptop.
@@ -551,7 +542,7 @@ Check the specific release's access terms, attribution and reuse restrictions be
 
 The supplied local folder was audited as containing 900 ISIC 2016 photographs and 5,000 COCO validation photographs. A later exact-ID join with ISIC 2019 diagnosis CSVs matched **568** lesion images: 447 nevi, 120 melanoma and one benign keratosis-like lesion. The remaining 332 were unmatched by that source; four requested lesion classes had zero matches. This is not a complete balanced seven-class dataset, and filename matching does not establish patient independence.
 
-See [the eleven-condition data audit](docs/ELEVEN_CLASS_DATA_AUDIT.md). Counts describe that dated audit, not any later downloads. Synthetic sample images created by `setup_dataset.py` are scaffolding and must not be treated as real disease-training evidence.
+See [the eleven-condition data audit](docs/ELEVEN_CLASS_DATA_AUDIT.md). Counts describe that dated audit, not any later downloads. Synthetic sample images created by `skinscanix/setup_dataset.py` are scaffolding and must not be treated as real disease-training evidence.
 
 ### Dataset layout
 
@@ -575,12 +566,12 @@ For SCIN, parse the weighted labels correctly. A record containing several possi
 
 ### Historical four-condition candidate trainer
 
-`train_candidate.py` is an isolated MobileNetV2 trainer for the existing case-labeled SCIN data. It uses case-separated internal validation, class/case-balanced sampling, training-only augmentation, and checkpoint selection by macro-F1.
+`skinscanix/train_candidate.py` is an isolated MobileNetV2 trainer for the existing case-labeled SCIN data. It uses case-separated internal validation, class/case-balanced sampling, training-only augmentation, and checkpoint selection by macro-F1.
 
 Requirements include PyTorch/torchvision, LiteRT for comparison, and the cached official ImageNet MobileNetV2 weights `mobilenet_v2-7ebf99e0.pth`. The script verifies the expected hash prefix and fails if they are missing; it does not automatically download them. It expects SCIN-style case filenames, not arbitrary ungrouped photos.
 
 ```bash
-python train_candidate.py --data work/scin_training_dataset_test/scin_training_dataset --name my_scin_candidate --head-epochs 25 --fine-epochs 4 --seed 42
+python -m skinscanix.train_candidate --data work/scin_training_dataset_test/scin_training_dataset --name my_scin_candidate --head-epochs 25 --fine-epochs 4 --seed 42
 ```
 
 The data path is an example local workspace path, not included in a fresh clone. Use a new candidate name for each run. Outputs go to ignored `work/candidates/<name>/`: checkpoint, labels, preprocessing metadata, split manifest, training history and evaluation. **It does not overwrite the deployed models or automatically export/promote a TFLite replacement.**
@@ -588,24 +579,24 @@ The data path is an example local workspace path, not included in a fresh clone.
 ### General trainer
 
 ```bash
-python train.py --data data/skin --epochs 8 --output work/candidate/skin_model.tflite --labels work/candidate/labels.txt
+python -m skinscanix.train --data data/skin --epochs 8 --output work/candidate/skin_model.tflite --labels work/candidate/labels.txt
 ```
 
 Always give a candidate output path: the defaults point at `models/`.
 
-- With PyTorch installed, `train.py` selects that path first and saves a `.pt` checkpoint, even when the requested output name ends in `.tflite`.
+- With PyTorch installed, `skinscanix/train.py` selects that path first and saves a `.pt` checkpoint, even when the requested output name ends in `.tflite`.
 - Otherwise, with TensorFlow installed, it can train and export TFLite; `--fine-tune-epochs` applies to that path.
 - Without either framework, its fallback only creates labels; **no model is trained**.
-- `requirements-train.txt` provides the TensorFlow training dependencies. Installing it alongside PyTorch does not force the TensorFlow branch. Use a separate environment when an explicit TensorFlow export workflow is needed.
+- `requirements/requirements-train.txt` provides the TensorFlow training dependencies. Installing it alongside PyTorch does not force the TensorFlow branch. Use a separate environment when an explicit TensorFlow export workflow is needed.
 
-`train_acne.py` and [the acne guide](docs/ACNE_TRAINING.md) support a separate experimental binary task. Training only Acne versus Not-Acne does not teach the other ten condition names.
+`skinscanix/train_acne.py` and [the acne guide](docs/ACNE_TRAINING.md) support a separate experimental binary task. Training only Acne versus Not-Acne does not teach the other ten condition names.
 
 ### Google Colab workflow
 
-1. Open [COLAB_PREPARE_SCIN.ipynb](COLAB_PREPARE_SCIN.ipynb) in Colab.
+1. Open [docs/notebooks/COLAB_PREPARE_SCIN.ipynb](docs/notebooks/COLAB_PREPARE_SCIN.ipynb) in Colab.
 2. Review authentication, dataset terms, exact labels and class counts before downloading the selected data.
 3. Verify the split by case/patient and remove duplicates; reserve an untouched test set.
-4. Open [COLAB_TRAIN_INDIAN_SKIN.ipynb](COLAB_TRAIN_INDIAN_SKIN.ipynb), supply the prepared dataset, and train a candidate.
+4. Open [docs/notebooks/COLAB_TRAIN_INDIAN_SKIN.ipynb](docs/notebooks/COLAB_TRAIN_INDIAN_SKIN.ipynb), supply the prepared dataset, and train a candidate.
 5. Save weights, label order, preprocessing metadata, metrics and split provenance together.
 6. Evaluate the entire local prediction pipeline before deploying anything.
 
@@ -681,9 +672,9 @@ After analysis, choose **Correct**, **Wrong**, or **Not sure**. A wrong result r
 Records are appended to `feedback/feedback.jsonl`; image copies are saved under random IDs in `feedback/images/`. Records include the prediction, correction, timestamp, model identifier, image hash and optional note. A random filename does not anonymize recognizable image content or remove all original metadata.
 
 ```bash
-python review_feedback.py
-python review_feedback.py --output outputs/feedback_review.csv
-python self_train.py --stats
+python -m skinscanix.review_feedback
+python -m skinscanix.review_feedback --output outputs/feedback_review.csv
+python -m skinscanix.self_train --stats
 ```
 
 Feedback is **unverified user input**, not dermatologist-confirmed truth. Saving it does not alter model weights. `self_train.train_on_feedback()` currently returns a review-required response without training; the UI's status button does not improve the model.
@@ -697,8 +688,8 @@ Local files are not automatically sent to GitHub, Drive or Hugging Face. The nor
 Google Drive helper setup is available:
 
 ```bash
-python -m pip install -r requirements-google-drive.txt
-python setup_google_drive_oauth.py /path/to/client_secret.json
+python -m pip install -r requirements/requirements-google-drive.txt
+python -m skinscanix.setup_google_drive_oauth /path/to/client_secret.json
 ```
 
 It requires your own appropriately configured Google OAuth client/private folder. The helper uses `GOOGLE_DRIVE_FOLDER_ID` and OAuth configuration described below. **`record_feedback()` does not call `drive_feedback.upload_feedback()`**, so setting credentials alone does not enable backup. Integration, error handling, consent/privacy review and testing remain necessary.
@@ -707,7 +698,7 @@ See [the feedback guide](docs/FEEDBACK_LOOP.md). Do not upload health images to 
 
 ## 16. Configuration
 
-`config.py` loads a local `.env` file if present without overwriting already-set environment variables. Do not commit `.env` or real secrets.
+`skinscanix/config.py` loads a local `.env` file if present without overwriting already-set environment variables. Do not commit `.env` or real secrets.
 
 | Setting | Meaning |
 |---|---|
@@ -721,7 +712,7 @@ See [the feedback guide](docs/FEEDBACK_LOOP.md). Do not upload health images to 
 | `GOOGLE_DRIVE_TOKEN_JSON` | OAuth token JSON for the helper; secret, never commit |
 | `GOOGLE_DRIVE_CLIENT_JSON` + `GOOGLE_DRIVE_REFRESH_TOKEN` | Alternative OAuth configuration supported by the helper |
 
-`MODEL_PATH`, `LABELS_PATH`, `IMAGE_SIZE=(224, 224)` and `MAX_UPLOAD_MB=10` are Python constants in `config.py`, not automatically configurable environment variables. Flask's host/port are CLI arguments.
+`MODEL_PATH`, `LABELS_PATH`, `IMAGE_SIZE=(224, 224)` and `MAX_UPLOAD_MB=10` are Python constants in `skinscanix/config.py`, not automatically configurable environment variables. Flask's host/port are CLI arguments.
 
 ## 17. Deployment
 
@@ -754,9 +745,9 @@ The loopback port binding keeps this trial local. `RENDER=1` here only tells the
 
 ### Hugging Face Spaces — pending
 
-Prepare Space metadata for the Gradio entry point and Python version. `requirements-space.txt` adds some inference dependencies, but a Space installs its root `requirements.txt`; ensure the prepared requirements also include ONNX Runtime for the active model. Review the uploader against the current artifact list before using it.
+Prepare Space metadata for the Gradio entry point and Python version. `requirements/requirements-space.txt` adds some inference dependencies, but a Space installs its root `requirements.txt`; ensure the prepared requirements also include ONNX Runtime for the active model. Review the uploader against the current artifact list before using it.
 
-The older allowlisted uploader combines requirements and excludes credentials, feedback, datasets and reports. **It is not ready to reproduce the current release:** its file list omits `models/skin_model.onnx` and `upload_preparation.py`. Update the allowlist, dependencies and Space metadata before a real upload. To inspect its current package without publishing:
+The older allowlisted uploader combines requirements and excludes credentials, feedback, datasets and reports. **It is not ready to reproduce the current release:** its file list omits `models/skin_model.onnx` and `skinscanix/upload_preparation.py`. Update the allowlist, dependencies and Space metadata before a real upload. To inspect its current package without publishing:
 
 ```bash
 python scripts/deploy_hf_space.py --repo OWNER/SPACE --dry-run

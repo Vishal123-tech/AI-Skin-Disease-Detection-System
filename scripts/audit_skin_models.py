@@ -11,7 +11,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from predictor import SkinPredictor
+from skinscanix.predictor import SkinPredictor
 from ai_edge_litert.interpreter import Interpreter
 
 

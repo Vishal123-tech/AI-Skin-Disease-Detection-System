@@ -18,7 +18,7 @@ os.environ["GEMINI_API_KEY"] = ""
 os.environ["ACNE_FOCUS_MODE"] = "0"
 os.environ["ACNE_PRIORITY_MODE"] = "0"
 import torch
-from predictor import SkinPredictor
+from skinscanix.predictor import SkinPredictor
 
 
 def file_hashes():

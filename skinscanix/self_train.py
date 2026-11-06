@@ -18,7 +18,7 @@ from typing  import Optional
 import numpy as np
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = ROOT / "models"
 BACKUP_DIR = MODELS_DIR / "backups"
 FEEDBACK_DIR = ROOT / "feedback"

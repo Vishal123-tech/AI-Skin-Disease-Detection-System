@@ -25,15 +25,15 @@ Browser or mobile phone displays the result
 
 | Component | Responsibility | Needs the disease model? |
 |---|---|---:|
-| `pi_capture.py` | Capture a photo with Picamera2/OpenCV and upload it | No |
-| `app.py` | Flask web page and JSON endpoint `/api/predict` | Yes, on the server |
+| `skinscanix/pi_capture.py` | Capture a photo with Picamera2/OpenCV and upload it | No |
+| `skinscanix/app.py` | Flask web page and JSON endpoint `/api/predict` | Yes, on the server |
 | `gradio_app.py` | Simple Gradio upload interface used by the current live UI | Yes, on the server |
-| `predictor.py` | Load models, run the gate, classify, and apply rejection rules | Yes |
-| `quality.py` | Check blur, brightness, and image quality | No |
-| `report.py` | Generate the PDF report | No |
+| `skinscanix/predictor.py` | Load models, run the gate, classify, and apply rejection rules | Yes |
+| `skinscanix/quality.py` | Check blur, brightness, and image quality | No |
+| `skinscanix/report.py` | Generate the PDF report | No |
 | `models/skin_gate.tflite` | Classify `SKIN` vs `NON_SKIN` | Yes |
 | `models/skin_model.tflite` | Classify the supported lesion classes | Yes |
-| `train.py` | Train/export a replacement classifier | Only during training |
+| `skinscanix/train.py` | Train/export a replacement classifier | Only during training |
 
 ## Local endpoints
 
@@ -49,7 +49,7 @@ This is the simple upload interface that matches the current live design.
 ### Flask user interface and API
 
 ```text
-python app.py
+python -m skinscanix.app
 http://127.0.0.1:5000/
 POST http://127.0.0.1:5000/api/predict
 ```
@@ -65,7 +65,7 @@ The Pi does not need TensorFlow Lite in cloud-inference mode. It needs only:
 - Python and `requests`
 - Wi-Fi access to the server
 
-The `SERVER_URL` in `pi_capture.py` must point to a reachable Flask `/api/predict` endpoint. A browser-only Gradio URL is not the same as a direct JSON API endpoint.
+The `SERVER_URL` in `skinscanix/pi_capture.py` must point to a reachable Flask `/api/predict` endpoint. A browser-only Gradio URL is not the same as a direct JSON API endpoint.
 
 ## Model flow
 

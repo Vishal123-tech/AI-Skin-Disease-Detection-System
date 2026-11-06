@@ -7,7 +7,7 @@ import csv
 import json
 from pathlib import Path
 
-from feedback import FEEDBACK_LOG
+from skinscanix.feedback import FEEDBACK_LOG
 
 
 def read_feedback(path: Path = FEEDBACK_LOG) -> list[dict]:

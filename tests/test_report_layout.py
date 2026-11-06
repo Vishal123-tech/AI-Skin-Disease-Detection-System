@@ -10,7 +10,7 @@ try:
     from pypdf import PdfReader
 except ImportError:
     PdfReader = None
-from report import create_report
+from skinscanix.report import create_report
 
 
 def sample_result():

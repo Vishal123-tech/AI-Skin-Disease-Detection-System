@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from predictor import SkinPredictor
-from self_train import train_on_feedback
+from skinscanix.predictor import SkinPredictor
+from skinscanix.self_train import train_on_feedback
 
 
 class RuntimeSelectionTests(unittest.TestCase):
@@ -58,9 +58,9 @@ class RuntimeSelectionTests(unittest.TestCase):
         self.assertEqual(self.p._load_runtime_selection(), "auto")
 
     def test_feedback_cannot_overwrite_active_checkpoint(self):
-        with patch("self_train.load_usable_feedback", return_value=[{"label": "Eczema"}]), \
-                patch("self_train.collect_replay_samples") as replay, \
-                patch("self_train.mark_learned_ids") as mark:
+        with patch("skinscanix.self_train.load_usable_feedback", return_value=[{"label": "Eczema"}]), \
+                patch("skinscanix.self_train.collect_replay_samples") as replay, \
+                patch("skinscanix.self_train.mark_learned_ids") as mark:
             result = train_on_feedback(min_samples=1)
         self.assertFalse(result["success"])
         self.assertTrue(result["requires_review"])

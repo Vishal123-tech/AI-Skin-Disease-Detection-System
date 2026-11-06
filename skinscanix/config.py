@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 # ── Load .env file if present (dev convenience) ───────────────────────────────
-_env_file = Path(__file__).resolve().parent / ".env"
+_env_file = Path(__file__).resolve().parents[1] / ".env"
 if _env_file.exists():
     for _line in  _env_file.read_text(encoding="utf-8").splitlines():
         _line = _line.strip()
@@ -10,7 +10,7 @@ if _env_file.exists():
             _k, _, _v = _line.partition("=")
             os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = ROOT / "models" / "skin_model.tflite"
 LABELS_PATH = ROOT / "models" / "labels.txt"
 ACNE_MODEL_PATH = ROOT / "models" / "acne_model.tflite"

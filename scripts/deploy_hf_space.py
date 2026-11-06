@@ -13,8 +13,8 @@ from huggingface_hub.errors import HfHubHTTPError
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = [
-    "README.md", "gradio_app.py", "branding.py", "ui_presentation.py", "config.py",
-    "predictor.py", "quality.py", "report.py", "feedback.py", "self_train.py",
+    "README.md", "gradio_app.py", "skinscanix/__init__.py", "skinscanix/gradio_app.py", "skinscanix/branding.py", "skinscanix/ui_presentation.py", "skinscanix/config.py",
+    "skinscanix/predictor.py", "skinscanix/quality.py", "skinscanix/report.py", "skinscanix/feedback.py", "skinscanix/self_train.py",
     "static/skinscanix-logo.png", "static/dermaai.css", "static/theme-tokens.css",
     "models/skin_model.tflite", "models/labels.txt", "models/skin_model.runtime.json",
     "models/skin_gate.tflite", "models/skin_gate_labels.txt",
@@ -37,9 +37,9 @@ def main():
             raise FileNotFoundError(name)
     # Gradio Spaces install root requirements.txt, not requirements-space.txt.
     base = (ROOT / "requirements.txt").read_text(encoding="utf-8")
-    extra = (ROOT / "requirements-space.txt").read_text(encoding="utf-8")
+    extra = (ROOT / "requirements/requirements-space.txt").read_text(encoding="utf-8")
     requirements = base + "\n" + "\n".join(
-        line for line in extra.splitlines() if line.strip() != "-r requirements.txt"
+        line for line in extra.splitlines() if line.strip() != "-r ../requirements.txt"
     ) + "\n"
     print(json.dumps({"repo": args.repo, "files": FILES + ["requirements.txt"],
                       "private_data_included": False}, indent=2))

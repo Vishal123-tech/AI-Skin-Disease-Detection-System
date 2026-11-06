@@ -2,7 +2,7 @@
 
 ## Prepare SCIN data first
 
-Open [`COLAB_PREPARE_SCIN.ipynb`](../COLAB_PREPARE_SCIN.ipynb) in Google Colab. It uses the official SCIN Google Cloud Storage bucket, asks you to authenticate with Google, prints the exact dermatologist labels, and downloads only the labels you explicitly map. Do not guess a label name.
+Open [`docs/notebooks/COLAB_PREPARE_SCIN.ipynb`](notebooks/COLAB_PREPARE_SCIN.ipynb) in Google Colab. It uses the official SCIN Google Cloud Storage bucket, asks you to authenticate with Google, prints the exact dermatologist labels, and downloads only the labels you explicitly map. Do not guess a label name.
 
 The SCIN project is documented at <https://github.com/google-research-datasets/scin>. It provides `scin_cases.csv`, `scin_labels.csv`, and image paths in `dataset/images/`; the GitHub ZIP alone does not contain the full image dataset.
 
@@ -10,7 +10,7 @@ The preparation notebook creates `scin_training_dataset.zip` with `train/` and `
 
 SCIN does not supply the project's `Normal Skin` and `Other Non Skin` classes. Add healthy, consented skin images and verified object/document/room/animal images separately. SCIN is collected from US contributors, so Maharashtra-specific training also needs consented Indian images reviewed by a qualified dermatologist.
 
-Open [`COLAB_TRAIN_INDIAN_SKIN.ipynb`](../COLAB_TRAIN_INDIAN_SKIN.ipynb) in Google Colab. Upload a ZIP containing `train/` and `val/` folders, with one correctly labeled folder per class.
+Open [`docs/notebooks/COLAB_TRAIN_INDIAN_SKIN.ipynb`](notebooks/COLAB_TRAIN_INDIAN_SKIN.ipynb) in Google Colab. Upload a ZIP containing `train/` and `val/` folders, with one correctly labeled folder per class.
 
 For the first Maharashtra-focused prototype, use a small, honest class list such as:
 

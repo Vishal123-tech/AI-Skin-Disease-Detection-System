@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 FEEDBACK_DIR = ROOT / "feedback"
 FEEDBACK_IMAGE_DIR = FEEDBACK_DIR / "images"
 FEEDBACK_LOG = FEEDBACK_DIR / "feedback.jsonl"
@@ -115,13 +115,13 @@ def record_feedback(
 
 def trigger_self_training(epochs: int = 5, min_samples: int = 1) -> dict:
     """Trigger the continuous self-training pipeline on saved feedback."""
-    from self_train import train_on_feedback
+    from skinscanix.self_train import train_on_feedback
     return train_on_feedback(epochs=epochs, min_samples=min_samples)
 
 
 def get_feedback_summary() -> dict:
     """Return summary of feedback collection and training status."""
-    from self_train import get_feedback_stats
+    from skinscanix.self_train import get_feedback_stats
     return get_feedback_stats()
 
 

@@ -21,7 +21,7 @@ Last reviewed: 28 August 2026
 - The previous seven-class model is also bundled as `models/skin_model_legacy.tflite`; the predictor uses it as a conservative fallback when the four-class SCIN model is weak.
 - Ollama was removed from the prediction path.
 - Live Render/Hugging Face deployment has not been changed during this local work.
-- An acne-priority training pipeline was added in `train_acne.py`; it keeps the
+- An acne-priority training pipeline was added in `skinscanix/train_acne.py`; it keeps the
   existing gate and broader disease experts instead of replacing them.
 - A local provisional acne dataset was prepared from 390 ACNE04 images and 899
   supplied ISIC lesion images. It is for an academic baseline only and is not
@@ -45,7 +45,7 @@ Last reviewed: 28 August 2026
 - The provisional acne test split reported 100% accuracy and AUC 1.0, but this
   must not be treated as real-world accuracy because the source mix is small,
   not Maharashtra-specific, and not a patient-separated phone-camera study.
-- A Gradio browser page and the Flask JSON API are separate interfaces. `pi_capture.py` currently targets Flask `/api/predict`, not a browser URL.
+- A Gradio browser page and the Flask JSON API are separate interfaces. `skinscanix/pi_capture.py` currently targets Flask `/api/predict`, not a browser URL.
 - The project does not yet have a tested production API endpoint connecting a Raspberry Pi directly to the hosted Gradio deployment.
 
 ## Remaining work before a proper live release

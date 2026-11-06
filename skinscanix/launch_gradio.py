@@ -2,8 +2,8 @@
 import os
 from pathlib import Path
 
-os.chdir(Path(__file__).resolve().parent)
-from gradio_app import demo, PORT, UI_LAUNCH_KWARGS
+os.chdir(Path(__file__).resolve().parents[1])
+from skinscanix.gradio_app import demo, PORT, UI_LAUNCH_KWARGS
 
 
 if __name__ == "__main__":

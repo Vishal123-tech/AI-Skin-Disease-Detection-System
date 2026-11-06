@@ -3,8 +3,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 import numpy as np
-from predictor import SkinPredictor
-from report import _confidence
+from skinscanix.predictor import SkinPredictor
+from skinscanix.report import _confidence
 
 
 class AcneRoutingTests(unittest.TestCase):
@@ -22,8 +22,8 @@ class AcneRoutingTests(unittest.TestCase):
         p._predict_acne_local = Mock(return_value={
             "category": "lesion", "raw_class": "Acne", "confidence": 0.973,
         })
-        skin = patch("predictor.skin_gate_hsv", return_value=(True, 0.8))
-        doc = patch("predictor.looks_like_document", return_value=False)
+        skin = patch("skinscanix.predictor.skin_gate_hsv", return_value=(True, 0.8))
+        doc = patch("skinscanix.predictor.looks_like_document", return_value=False)
         self.skin = skin.start()
         self.doc = doc.start()
         self.addCleanup(skin.stop)

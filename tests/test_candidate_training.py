@@ -2,7 +2,7 @@
 import unittest
 import numpy as np
 
-from train_candidate import LABELS, case_weights, check_separation, metrics, split_training
+from skinscanix.train_candidate import LABELS, case_weights, check_separation, metrics, split_training
 
 
 class CandidateTrainingTests(unittest.TestCase):

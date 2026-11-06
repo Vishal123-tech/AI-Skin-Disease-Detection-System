@@ -51,7 +51,7 @@ All artifacts are under the ignored local directory
 Reproduce in a new output directory:
 
 ```powershell
-python train_candidate.py --data work/scin_training_dataset_test/scin_training_dataset --name scin_balanced_repeat --head-epochs 25 --fine-epochs 4 --seed 42
+python -m skinscanix.train_candidate --data work/scin_training_dataset_test/scin_training_dataset --name scin_balanced_repeat --head-epochs 25 --fine-epochs 4 --seed 42
 ```
 
 ## Before activation

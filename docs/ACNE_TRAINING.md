@@ -37,11 +37,11 @@ data/acne/
     └── Not_Acne/
 ```
 
-You can use `prepare_acne_dataset.py` to copy already labelled source folders
+You can use `skinscanix/prepare_acne_dataset.py` to copy already labelled source folders
 into this structure:
 
 ```bash
-python prepare_acne_dataset.py --acne path/to/Acne --not-acne path/to/Not_Acne
+python -m skinscanix.prepare_acne_dataset --acne path/to/Acne --not-acne path/to/Not_Acne
 ```
 
 Keep images from the same person in only one split. Otherwise the score can be
@@ -56,11 +56,11 @@ matter more than a large unverified number.
 
 ## Train in Colab or locally
 
-Install TensorFlow (use `requirements-train.txt` on a training machine), place
+Install TensorFlow (use `requirements/requirements-train.txt` on a training machine), place
 the folders above in the workspace, then run:
 
 ```bash
-python train_acne.py --data data/acne --head-epochs 12 --fine-tune-epochs 20
+python -m skinscanix.train_acne --data data/acne --head-epochs 12 --fine-tune-epochs 20
 ```
 
 The script uses MobileNetV2 transfer learning, class weights, augmentation,

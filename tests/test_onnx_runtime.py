@@ -8,7 +8,7 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image
 
-from predictor import SkinPredictor, prepare_onnx_image
+from skinscanix.predictor import SkinPredictor, prepare_onnx_image
 
 
 class OnnxRuntimeTests(unittest.TestCase):

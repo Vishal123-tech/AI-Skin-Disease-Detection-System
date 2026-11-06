@@ -42,7 +42,7 @@ def _credentials():
         from google.oauth2.credentials import Credentials
     except ImportError as exc:
         raise RuntimeError(
-            "Google Drive support is not installed. Install requirements-google-drive.txt."
+            "Google Drive support is not installed. Install requirements/requirements-google-drive.txt."
         ) from exc
 
     token_info = _json_env("GOOGLE_DRIVE_TOKEN_JSON")
@@ -82,7 +82,7 @@ def upload_feedback(image_path: Path, record: dict) -> dict:
         from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload
     except ImportError as exc:
         raise RuntimeError(
-            "Google Drive support is not installed. Install requirements-google-drive.txt."
+            "Google Drive support is not installed. Install requirements/requirements-google-drive.txt."
         ) from exc
 
     service = build("drive", "v3", credentials=_credentials(), cache_discovery=False)

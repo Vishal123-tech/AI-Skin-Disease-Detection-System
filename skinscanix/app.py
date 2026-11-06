@@ -14,7 +14,7 @@ from pathlib import Path
 from flask import Flask, request, render_template_string, send_from_directory
 from werkzeug.utils import secure_filename
 
-from config  import (
+from skinscanix.config  import (
     ACNE_LABELS_PATH,
     ACNE_MODEL_PATH,
     GATE_LABELS_PATH,
@@ -26,13 +26,13 @@ from config  import (
     REPORT_DIR,
     UPLOAD_DIR,
 )
-from predictor import SkinPredictor
-from quality import check_image
-from report import create_report
-from feedback import record_feedback, trigger_self_training, get_feedback_summary
-from branding import website_header
+from skinscanix.predictor import SkinPredictor
+from skinscanix.quality import check_image
+from skinscanix.report import create_report
+from skinscanix.feedback import record_feedback, trigger_self_training, get_feedback_summary
+from skinscanix.branding import website_header
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=str(Path(__file__).resolve().parents[1] / "static"))
 app.jinja_env.globals["brand_header"] = website_header()
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
 predictor = SkinPredictor(

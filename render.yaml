@@ -2,7 +2,7 @@ services:
   - type: web
     name: ai-skin-disease-detection
     runtime: python
-    buildCommand: pip install -r requirements-deploy.txt
+    buildCommand: pip install -r requirements/requirements-deploy.txt
     startCommand: python gradio_app.py
     healthCheckPath: /
     envVars:

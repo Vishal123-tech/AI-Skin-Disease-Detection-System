@@ -2,8 +2,8 @@
 from html import escape
 from pathlib import Path
 
-CSS = (Path(__file__).parent / "static" / "dermaai.css").read_text(encoding="utf-8")
-THEME_HEAD = '<style id="dermaai-theme-tokens">' + (Path(__file__).parent / "static" / "theme-tokens.css").read_text(encoding="utf-8") + '</style>'
+CSS = (Path(__file__).resolve().parents[1] / "static" / "dermaai.css").read_text(encoding="utf-8")
+THEME_HEAD = '<style id="dermaai-theme-tokens">' + (Path(__file__).resolve().parents[1] / "static" / "theme-tokens.css").read_text(encoding="utf-8") + '</style>'
 
 EMPTY_RESULT = '''<section class="result-empty" aria-label="Analysis result" aria-live="polite">
 <div class="empty-symbol" aria-hidden="true">◎</div>

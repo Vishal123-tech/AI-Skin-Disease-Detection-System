@@ -13,9 +13,9 @@ class PredictionSurfaceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Surface tests use controlled predictions, not heavyweight model loads.
-        with patch("predictor.SkinPredictor"):
-            cls.ui = importlib.import_module("gradio_app")
-            cls.api = importlib.import_module("app")
+        with patch("skinscanix.predictor.SkinPredictor"):
+            cls.ui = importlib.import_module("skinscanix.gradio_app")
+            cls.api = importlib.import_module("skinscanix.app")
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -34,14 +34,18 @@ class PredictionSurfaceTests(unittest.TestCase):
 
     def test_gradio_and_pdf_accept_unavailable_confidence(self):
         with patch.object(self.ui.predictor, "predict", return_value=self.result), patch.object(self.ui, "REPORT_DIR", self.root):
-            text, pdf, context, _ = self.ui.analyze(str(self.image))
+            updates = list(self.ui.analyze(str(self.image)))
+            text, pdf, context, _ = updates[-1]
+        self.assertEqual(len(updates), 5)
+        self.assertIn("Preparing your photo", updates[0][0])
+        self.assertIn("Analysis complete", text)
         self.assertIn("Unavailable — models disagree", text)
         self.assertNotIn("Top possible condition", text)
         self.assertIsNone(context["result"]["confidence"])
         self.assertTrue(Path(pdf).read_bytes().startswith(b"%PDF"))
 
     def test_website_headers_include_the_skinscanix_logo(self):
-        from branding import LOGO_PATH, website_header
+        from skinscanix.branding import LOGO_PATH, website_header
         import base64
         header = website_header()
         self.assertIn('alt="SkinScanix logo"', header)

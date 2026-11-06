@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from PIL import Image
-from upload_preparation import prepare_upload
+from skinscanix.upload_preparation import prepare_upload
 
 
 class UploadPreparationTests(unittest.TestCase):

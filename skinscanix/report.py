@@ -18,7 +18,7 @@ from typing import Any
 
 from PIL import Image as PILImage
 from PIL import ImageOps
-from branding import BRAND_NAME, LOGO_PATH
+from skinscanix.branding import BRAND_NAME, LOGO_PATH
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4

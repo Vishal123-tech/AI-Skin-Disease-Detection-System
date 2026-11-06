@@ -16,7 +16,7 @@ def main() -> None:
         from google_auth_oauthlib.flow import InstalledAppFlow
     except ImportError as exc:
         raise SystemExit(
-            "Install requirements-google-drive.txt before running this script."
+            "Install requirements/requirements-google-drive.txt before running this script."
         ) from exc
 
     flow = InstalledAppFlow.from_client_secrets_file(
