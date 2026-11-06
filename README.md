@@ -34,7 +34,7 @@
 
 You do not need to understand programming to try it. Open the demo on a phone or computer, choose an image you have permission to use, and select **Analyze image**. The result may be a possible condition, an uncertain answer, or a request for a suitable skin image—not a confirmed diagnosis.
 
-The project brings together a website, image-analysis models, PDF reports and an optional Raspberry Pi camera workflow. **Acne is a development priority**, alongside other common skin conditions and selected lesion categories.
+The project brings together a website, image-analysis models, PDF reports and an optional Raspberry Pi camera workflow. The current main model includes **Normal Skin** alongside four condition categories; a separate legacy model handles selected lesion categories.
 
 ### Your first visit
 
@@ -50,11 +50,24 @@ The first visit to the Render demo may be slow while the server wakes up. Use a 
 |---|---|---|
 | **Photo analysis** | Software compares image patterns with patterns learned during training. | Yes, with important accuracy limitations |
 | **Skin-image screening** | A first check tries to reject documents, objects and unrelated pictures. | Yes; it can also reject genuine skin incorrectly |
+| **Photo guide** | Open framing, lighting and focus tips beside the image without scrolling down. | Yes, in a compact popover |
+| **Progress messages** | See photo preparation, quality checks, analysis and report generation on every run. | Yes, plus a completion-time summary |
+| **Normal Skin output** | The main model can select a normal-looking skin category. | Experimental; does not confirm healthy skin |
+| **Bounded uploads** | Large phone photos are resized before analysis to reduce server memory use. | Yes; upload limits apply |
 | **Clear results** | A mobile-friendly interface explains the output and image quality. | Yes, with light and dark themes |
 | **PDF report** | Save the image and assessment in a readable document. | Yes; standard reports fit one A4 page |
 | **Feedback** | Tell the project when an answer seems wrong, for later human review. | Collection works; automatic learning is paused |
 | **Pi camera** | A small computer photographs the skin and sends the image to a server. | Client code exists; physical end-to-end testing remains |
 | **Installable phone app** | Open SkinScanix from a phone's home screen like an app. | Proposed PWA improvement; not implemented in this release |
+
+### Latest improvements
+
+- **Photo guide:** framing, focus and lighting tips open beside the upload area.
+- **Visible progress:** the result panel shows each processing stage on every analysis, followed by a persistent completion summary.
+- **Better handling of phone uploads:** bounded image decoding, a small queue and one analysis at a time reduce memory pressure on the hosted service.
+- **Five-class main model:** Normal Skin joins Acne Vulgaris, Eczema, Fungal Infection and Psoriasis. This remains an experimental assessment, with known classification errors.
+
+The latest UI and memory changes did not retrain the model. See [release evidence](#14-evaluation-and-known-results) for measured results and limitations.
 
 ### Choose your reading path
 
@@ -69,7 +82,7 @@ The first visit to the Render demo may be slow while the server wakes up. Use a 
 
 **Does it detect every skin disease?**
 
-No. Two separate classifiers contain 11 condition names between them. That is a list of possible labels, **not proof of reliable detection of all 11 conditions**. [See the scope](#3-supported-condition-labels).
+No. The main classifier has four condition labels plus Normal Skin, and a separate legacy classifier has seven lesion labels. That is a list of possible labels, **not proof of reliable detection of all 11 conditions**. [See the scope](#3-supported-condition-labels).
 
 **Does “95% confidence” mean a 95% chance that I have that disease?**
 
@@ -112,7 +125,7 @@ No. India/Maharashtra is an intended focus. Consented, expert-labeled local data
 
 The sections below cover the project from setup to deployment, including what is implemented, what remains experimental, and what still needs work.
 
-**Documentation review:** 25 September 2026. Older guides retain earlier milestones; use this README and the active source for current behavior. The dates and measurements below are evidence from specific checks, not continuously updated health or accuracy guarantees.
+**Documentation review:** 6 November 2026. Latest application release documented here: `be5d0ea` (30 October 2026). Older guides retain earlier milestones; use this README and the active source for current behavior. The dates and measurements below are evidence from specific checks, not continuously updated health or accuracy guarantees.
 
 <details>
 <summary><strong>Browse all 21 sections</strong></summary>
@@ -171,34 +184,34 @@ The intended regional focus is India, especially Maharashtra/Mumbai. **The curre
 | Area | Current implementation and evidence |
 |---|---|
 | Branding and UI | SkinScanix logo, responsive layout, light/dark themes, compact Settings and API panels |
-| Live website | Render deployment succeeded on 25 September 2026; public SkinScanix page verified |
-| GitHub application release | Deployed code commit `0e43aee`, including release `7352c64` |
-| Main classifier | Pinned four-condition SCIN TFLite baseline |
+| Live website | Render release `be5d0ea` verified on 30 October 2026, including repeated analysis and PDF downloads |
+| Latest application changes | `be5d0ea`: photo guide and visible stages; `6d0fa4d`: upload-memory and concurrency fixes |
+| Main classifier | Pinned five-class MobileNetV2 ONNX model, including Normal Skin |
 | Legacy classifier | Separate seven-label lesion fallback; not a unified 11-class model |
 | Skin gate | Bundled binary model plus heuristics; known false rejections remain |
 | PDF reports | Compact A4 layout; standard reports fit one page, unusually long notes continue |
 | Feedback | Local collection implemented; automatic/one-click training paused |
-| Improved candidate | Separate four-condition MobileNetV2 candidate trained locally; **not deployed** |
+| Candidate experiments | Kept separate from the deployed artifact; improved results on one subset do not establish overall improvement |
 | Flask API | Implemented separately from the public Gradio service |
 | Raspberry Pi | Capture/upload client included; actual end-to-end hardware verification pending |
 | Permanent feedback storage | Google Drive helper included but **not connected** to feedback saving |
-| Hugging Face hosting | Upload helper prepared; account creation attempt blocked by HTTP 402 subscription requirement |
+| Hugging Face hosting | Upload helper exists; no verified live Space URL is documented here |
 | Clinical and regional validation | Not completed |
 
 Deploying the UI and report changes did **not** retrain the model or prove improved accuracy.
 
 ## 3. Supported condition labels
 
-There are **11 condition names across two separate disease classifiers**, not 11 independently validated detection capabilities.
+The main classifier has **five labels: four conditions and Normal Skin**. The legacy classifier adds seven lesion labels. These are separate models, not a unified or clinically validated 12-class detector.
 
 | Classifier | Condition labels |
 |---|---|
-| Main SCIN model — 4 classes | Acne Vulgaris; Eczema; Fungal Infection; Psoriasis |
+| Main MobileNetV2 ONNX model — 5 classes | Acne Vulgaris; Eczema; Fungal Infection; Psoriasis; **Normal Skin** |
 | Legacy lesion model — 7 classes | Actinic Keratoses; Basal Cell Carcinoma; Benign Keratosis-like Lesions; Dermatofibroma; Melanocytic Nevi; Melanoma; Vascular Lesions |
 
 The legacy model is associated with dermoscopic lesion imagery. Its scores cannot simply be compared with the common-condition model's scores as though both were one calibrated classifier.
 
-Additional outputs include non-skin, uncertain input, and runtime/demo status. **Normal Skin** appears among feedback choices, but this does not mean a validated healthy-skin classifier exists. Scabies and Vitiligo are not classes in the active four-condition model. Dataset names such as **SCIN** describe the source/model, not a disease.
+Additional outputs include non-skin, uncertain input, and runtime/demo status. **Normal Skin is now an active model label**, but it does not confirm that a person is healthy or rule out disease. Scabies and Vitiligo are not classes in the active five-class model. Dataset names such as **SCIN** describe the source/model, not a disease.
 
 ## 4. End-to-end architecture
 
@@ -213,6 +226,10 @@ Phone or computer browser
           v
 Gradio server (gradio_app.py)
           |
+          +--> bounded queue: one analysis at a time
+          |
+          +--> upload_preparation.py: validate dimensions, resize, orient
+          |
           +--> quality.py: image size, sharpness, brightness
           |
           +--> predictor.py: local skin checks and model selection
@@ -222,7 +239,7 @@ Gradio server (gradio_app.py)
           +--> report.py: PDF report
           |
           v
-Result panel + downloadable PDF
+Live stage messages -> result + completion time + downloadable PDF
           |
           +--> optional consented feedback -> local review queue
 ```
@@ -241,7 +258,7 @@ Pi Camera -> Raspberry Pi -> Wi-Fi/LAN -> Flask POST /api/predict
                                       phone/computer browser
 ```
 
-**The Pi captures and sends the photograph; the server runs the models.** TensorFlow Lite/LiteRT is used for compact inference on the server. It does not need to run on the Pi in this architecture.
+**The Pi captures and sends the photograph; the server runs the models.** ONNX Runtime runs the main model; LiteRT runs the skin gate and legacy model on the server. It does not need to run on the Pi in this architecture.
 
 The current Pi script prints the result and PDF URL in its terminal. It does **not** automatically send a notification to a phone, pair a phone with a Pi session, or push a result into an already-open browser. Those features need a device/session workflow.
 
@@ -254,7 +271,8 @@ Gradio and Flask share prediction/report modules but are **different server entr
 | Python | Application, inference, training utilities, PDF and hardware client code |
 | Gradio 6.25.0 | Main upload interface, result panel, feedback controls and API documentation |
 | Flask | Separate web interface and JSON endpoints for integrations |
-| TensorFlow Lite / LiteRT | Execute bundled `.tflite` models on the server |
+| ONNX Runtime | Execute the pinned five-class MobileNetV2 model on CPU |
+| TensorFlow Lite / LiteRT | Execute the skin gate and legacy lesion `.tflite` models |
 | PyTorch and torchvision | MobileNetV2 candidate training and optional checkpoint support |
 | TensorFlow | Optional training/export path in `train.py` and Colab workflows |
 | OpenCV | Image-quality checks, image heuristics and fallback camera capture |
@@ -280,6 +298,7 @@ SkinScanix/
 ├── launch_gradio.py                 # Explicit public sharing-tunnel launcher
 ├── app.py                          # Separate Flask UI/API
 ├── predictor.py                    # Model loading, gates and routing
+├── upload_preparation.py           # Bounded decoding and phone-photo preparation
 ├── quality.py                      # Quality measurements
 ├── report.py                       # PDF generation
 ├── branding.py                     # Brand name and logo handling
@@ -333,14 +352,16 @@ Windows PowerShell:
 ```powershell
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-space.txt
-python run_local_ui.py
+python -m pip install onnxruntime==1.30.0
+python run_local_ui.py --host 127.0.0.1 --port 7860
 ```
 
 If activation is restricted, use the interpreter directly instead of changing system security settings:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-space.txt
-.\.venv\Scripts\python.exe run_local_ui.py
+.\.venv\Scripts\python.exe -m pip install onnxruntime==1.30.0
+.\.venv\Scripts\python.exe run_local_ui.py --host 127.0.0.1 --port 7860
 ```
 
 Linux:
@@ -348,29 +369,46 @@ Linux:
 ```bash
 source .venv/bin/activate
 python -m pip install -r requirements-space.txt
-python run_local_ui.py
+python -m pip install onnxruntime==1.30.0
+python run_local_ui.py --host 127.0.0.1 --port 7860
 ```
 
 Open **http://127.0.0.1:7860/**. Keep the terminal running; press `Ctrl+C` to stop.
 
-`run_local_ui.py` binds to loopback, disables public sharing, clears Gemini for that process, and disables experimental acne modes. It is the preferred local trial launcher. This address works only on the same computer.
+The commands above explicitly bind to loopback for a private trial on the same computer. `run_local_ui.py` defaults to `0.0.0.0`, clears Gemini for that process, disables experimental acne modes and opens no public sharing tunnel unless you pass `--share`.
+
+For a phone on the same trusted Wi-Fi network, start `python run_local_ui.py --host 0.0.0.0 --port 7860`, then open `http://YOUR_COMPUTER_LAN_IP:7860/` on the phone. Use your actual LAN IP and allow the port only on that trusted network. Phone camera controls depend on browser permissions and secure-context support; file upload is an alternative.
 
 Theme previews: `http://127.0.0.1:7860/?__theme=light` and `http://127.0.0.1:7860/?__theme=dark`.
 
 **Do not confuse the launchers:** `launch_gradio.py` explicitly creates a public tunnel. Running `gradio_app.py` directly also requests sharing outside recognized cloud environments. Do not use those launchers for a private local-only test.
 
-The inference requirements include CPU PyTorch/torchvision and LiteRT. Full TensorFlow is not needed to run the pinned TFLite baseline. These server wheels are not the Raspberry Pi camera client's installation requirements.
+The inference requirements include CPU PyTorch/torchvision and LiteRT. The additional ONNX Runtime install is required because `requirements-space.txt` does not currently include it. Full TensorFlow is not needed for the pinned ONNX model. These server wheels are not the Raspberry Pi camera client's installation requirements.
 
 ## 8. Using the website and PDF report
 
 1. Open the local or public Gradio page.
 2. Upload a clear, close-up image that you have permission to use. Avoid identifying details.
-3. Select **Analyze image**.
-4. Review the assessment, model confidence and image-quality information.
+3. Open **Photo guide** for framing, focus and lighting tips, then select **Analyze image**.
+4. Watch the stage messages, then review the assessment, model confidence and image-quality information.
 5. Download the PDF under **Your PDF report**.
 6. Optionally provide feedback and explicitly consent to storing the image for supervised improvement.
 
 Changing the uploaded image clears the prior result/report and feedback context so they are not mistaken for the new image's output.
+
+### Progress and phone-photo limits
+
+The result panel updates through **Preparing your photo → Checking image quality → Analysing the skin image → Creating your PDF report**. A successful run leaves an **Analysis complete** summary and duration visible. The duration measures server callback processing, not upload, queue waiting or download time.
+
+| Upload constraint | Current Gradio behavior |
+|---|---|
+| File size | Maximum 10 MB (preparation checks 10 × 1024 × 1024 bytes) |
+| JPEG dimensions | At most 50 megapixels |
+| Other decodable image formats | At most 4 megapixels |
+| Working image | Resized to fit within 1280 × 1280 pixels, with EXIF orientation correction |
+| Concurrent processing | One analysis at a time; queue size limited to three |
+
+Resizing can change quality scores and predictions. These limits reduce memory pressure; they do not guarantee that a free hosting instance cannot restart. If the service gets stuck, see [troubleshooting](#18-testing-and-troubleshooting).
 
 ### Report contents
 
@@ -384,6 +422,7 @@ Standard reports use a compact **one-page A4 layout**. Extremely long notes can 
 
 ### Understanding the result
 
+- **Normal Skin:** the model selected a normal-looking pattern; this does not confirm healthy skin.
 - **Condition assessment:** the model selected a supported label; this is not confirmation.
 - **Uncertain:** the model/routing did not produce a sufficiently usable answer. It does not necessarily mean the photo is blurry.
 - **Non-skin:** the screening logic rejected the image; genuine skin can still be rejected incorrectly.
@@ -419,7 +458,7 @@ curl -X POST http://127.0.0.1:5000/api/predict -F "image=@sample.jpg"
 
 In Windows PowerShell, use `curl.exe` if `curl` is aliased to another command.
 
-The multipart field must be named **`image`**. Flask's configured request-size limit is **10 MB**; this is not a claim that Gradio enforces the same limit.
+The multipart field must be named **`image`**. Flask's configured request-size limit is **10 MB**. Gradio separately enforces its upload and image-dimension limits described above; the Flask path does not automatically inherit Gradio's preparation/queue logic.
 
 Responses include `status`, `category`, `label`, `raw_class`, formatted `confidence`, `top3`, `model_used`, `notes`, `quality`, `quality_ok`, `report_url`, `backend`, and descriptive condition fields where available. `confidence` can be `"Unavailable"`. HTTP/application success means processing completed, not that the disease label is correct.
 
@@ -474,13 +513,14 @@ The client is a prototype: it retains its local capture and needs request timeou
 
 | Artifact | Role / current selection |
 |---|---|
-| `models/skin_model.tflite` + `labels.txt` | Active four-condition SCIN baseline |
+| `models/skin_model.onnx` + `labels.txt` | Active five-class MobileNetV2 model, including Normal Skin |
+| `models/skin_model.tflite` | Retained older baseline; not the active main runtime |
 | `models/skin_model.runtime.json` | Active artifact hash, label order, preprocessing and acne-cross-check selection |
 | `models/skin_gate.tflite` + `skin_gate_labels.txt` | Binary skin/non-skin gate |
 | `models/skin_model_legacy.tflite` + `labels_legacy.txt` | Separate seven-label lesion fallback |
 | `models/acne_model.tflite` + `acne_labels.txt` | Experimental binary specialist; normal cross-check disabled |
-| `models/skin_model.pt` | Retained feedback checkpoint; not selected by the current runtime pin |
-| `models/skin_model_metadata.json` | Historical training metadata; not the authoritative active-artifact selection |
+| `models/skin_model.pt` | Retained PyTorch checkpoint; not selected by the current runtime pin |
+| `models/skin_model_metadata.json` | Training/release metadata; the runtime manifest selects the active artifact |
 
 The local prediction path combines trained models with color/document heuristics, uncertainty rules and legacy routing. It is not a general-purpose visual diagnosis system.
 
@@ -488,11 +528,11 @@ The local prediction path combines trained models with color/document heuristics
 
 A feedback checkpoint trained with **one image and zero replay images** replaced a useful baseline in an earlier workflow and predicted Eczema on all 79 audited images. Its recorded 100% validation score came from reusing the one training image, not independent testing.
 
-The runtime manifest now pins the earlier TFLite artifact and label order. It specifies **raw 0–255 input** because the model already includes rescaling. Applying an additional incompatible normalization changes the predictions. A hash/label mismatch stops loading rather than silently selecting different weights. Do not edit the hash simply to suppress an error.
+The runtime manifest now pins the **five-class ONNX artifact**, its label order and preprocessing: EXIF orientation, RGB, shorter-side resize to 256, center crop to 224 and ImageNet normalization. The export includes softmax. This differs from the earlier TFLite preprocessing; mixing them changes predictions. A hash/label mismatch stops loading rather than silently selecting different weights. Do not edit the hash simply to suppress an error.
 
-The bundled binary acne model also produced many false positives in an audit. The normal cross-check is disabled by the pin, even if an environment setting requests it. `ACNE_FOCUS_MODE` is an experimental binary-only path, not a validated improvement.
+The bundled binary acne specialist is disabled by the current manifest and is not loaded when both optional acne modes are off. The legacy model remains available for low-confidence broad-model results; legacy inference is skipped when broad confidence is at least 0.65. These routing rules are not clinical thresholds.
 
-An optional Gemini code path exists and can take precedence if a compatible SDK/key is configured. It is not required by the documented installation and not used by `run_local_ui.py`. Enabling a remote model changes the data flow and requires a separate privacy/evaluation review; it is not evidence of additional validated disease coverage.
+An optional Gemini code path exists, but the active manifest sets `force_local: true` and disables remote inference. Gemini is not required by the documented installation; `run_local_ui.py` also clears its key for the process. Enabling a remote model changes the data flow and requires a separate privacy/evaluation review; it is not evidence of additional validated disease coverage.
 
 ## 12. Datasets and labeling
 
@@ -521,7 +561,8 @@ data/skin/
 │   ├── Acne Vulgaris/
 │   ├── Eczema/
 │   ├── Fungal Infection/
-│   └── Psoriasis/
+│   ├── Psoriasis/
+│   └── Normal Skin/
 ├── val/                 # Same label folders, different cases/patients
 └── test/                # Same label folders, untouched independent cases
 ```
@@ -532,7 +573,7 @@ For SCIN, parse the weighted labels correctly. A record containing several possi
 
 ## 13. Training and model promotion
 
-### Preferred experimental four-condition candidate
+### Historical four-condition candidate trainer
 
 `train_candidate.py` is an isolated MobileNetV2 trainer for the existing case-labeled SCIN data. It uses case-separated internal validation, class/case-balanced sampling, training-only augmentation, and checkpoint selection by macro-F1.
 
@@ -585,16 +626,40 @@ No current script certifies that a candidate is clinically safe or automatically
 
 ## 14. Evaluation and known results
 
+### Current five-class release: recorded internal evaluation
+
+The [5 October release report](docs/NORMAL_SKIN_RELEASE_20261005.md) records **248/347 correct pipeline outputs (71.47%)**. These are small, imbalanced, provisional-label development samples—not an independent clinical test or a promise of accuracy on your photos.
+
+| Class / error measure | Recorded result |
+|---|---:|
+| Acne correct | 102/135 |
+| Eczema correct | 94/124 |
+| Fungal Infection correct | 0/7 |
+| Psoriasis correct | 0/6 |
+| Normal Skin correct | 52/75 |
+| Normal images assigned a disease | 9/75 |
+| Disease images assigned Normal Skin | 5/272 |
+
+Fungal Infection and Psoriasis performance in this evaluation is inadequate. The Normal Skin category also makes mistakes. Source PyTorch and exported ONNX predictions agreed on all 347 images; **export agreement checks conversion, not medical correctness**. Later upload resizing can change predictions, so these figures are not a fresh evaluation of the latest hosted pipeline.
+
+### Latest operational checks
+
+- The 27 October memory fix passed 14 upload/runtime tests; three simultaneous synthetic 48 MP JPEG submissions returned PDFs locally. See [the memory-fix report](docs/RENDER_MEMORY_FIX.md) for timings and limits.
+- After the 30 October UI deployment, two consecutive public-server trials returned all four progress stages, completion summaries and PDFs.
+- These checks demonstrate application behavior, not diagnostic performance. The UI and memory releases did not change model weights.
+
+### Historical four-condition comparison (September 2026)
+
 **How to read this section:** accuracy counts the fraction of correct answers. Macro-F1 balances precision and recall while giving each condition equal importance, so a large Eczema class cannot hide every weak class. Neither measure alone captures cases rejected by the skin gate, so full-pipeline results are shown separately.
 
 The historical SCIN comparison set has **79 images**: 5 Acne, 56 Eczema, 8 Fungal Infection and 10 Psoriasis. It has already been used during development and is **not a blind clinical test**.
 
 | Raw classifier comparison | Correct / 79 | Accuracy | Macro-F1 |
 |---|---:|---:|---:|
-| Active original SCIN TFLite | 53 | 67.1% | 0.520 |
+| Historical original SCIN TFLite | 53 | 67.1% | 0.520 |
 | Isolated balanced candidate, not deployed | 61 | 77.2% | 0.684 |
 
-These are classifier-only measurements, before gate rejection and legacy routing. For the active **complete pipeline** on the same images:
+These are classifier-only measurements, before gate rejection and legacy routing. For that historical **complete pipeline** on the same images:
 
 | Outcome | Images |
 |---|---:|
@@ -666,9 +731,11 @@ Review `git diff` and tests before committing. Keep datasets, patient images, ge
 
 ### Render — current live host
 
-The verified service uses the checked-in **Dockerfile**, Python 3.12, CPU PyTorch and LiteRT, and starts `python gradio_app.py`. The app binds to `0.0.0.0` using Render's `PORT`.
+The verified service uses the checked-in **Dockerfile**, Python 3.12, CPU PyTorch, ONNX Runtime and LiteRT, and starts `python gradio_app.py`. The app binds to `0.0.0.0` using Render's `PORT`.
 
-On **25 September 2026**, deployment of commit `0e43aee` succeeded. Logs confirmed loading the four-class main model, seven-class legacy model and skin gate; the public page showed SkinScanix branding and the updated interface. This verifies deployment/startup, not disease accuracy. Standard one-page PDF behavior was tested locally; this deployment check did not upload a patient image.
+The latest verified application deployment was **30 October 2026**, commit `be5d0ea`, adding the compact photo guide and visible progress stages. It includes `6d0fa4d`, which addressed repeated out-of-memory restarts observed on the 512 MB instance. Repeated public analysis/PDF trials succeeded after deployment; this is a dated verification, not a continuous uptime guarantee.
+
+Local processing can be faster because your computer may have more memory/CPU, there is no remote upload, and the process is already warm. The public service also has network latency, shared resources, queue waiting and possible cold starts. Progress messages explain work; they do not add compute capacity.
 
 For updates: push reviewed changes → deploy the desired commit in Render → inspect build/startup logs → verify the public page and approved smoke tests. The existing service was manually deployed. Free-instance inactivity may cause a slow first request.
 
@@ -687,16 +754,15 @@ The loopback port binding keeps this trial local. `RENDER=1` here only tells the
 
 ### Hugging Face Spaces — pending
 
-The README frontmatter specifies the Gradio entry point and Python version. `requirements-space.txt` adds inference dependencies, but a Space installs its root `requirements.txt`; the files must be prepared accordingly.
+Prepare Space metadata for the Gradio entry point and Python version. `requirements-space.txt` adds some inference dependencies, but a Space installs its root `requirements.txt`; ensure the prepared requirements also include ONNX Runtime for the active model. Review the uploader against the current artifact list before using it.
 
-The allowlisted uploader combines requirements and excludes credentials, feedback, datasets and reports:
+The older allowlisted uploader combines requirements and excludes credentials, feedback, datasets and reports. **It is not ready to reproduce the current release:** its file list omits `models/skin_model.onnx` and `upload_preparation.py`. Update the allowlist, dependencies and Space metadata before a real upload. To inspect its current package without publishing:
 
 ```bash
 python scripts/deploy_hf_space.py --repo OWNER/SPACE --dry-run
-python scripts/deploy_hf_space.py --repo OWNER/SPACE
 ```
 
-Replace `OWNER/SPACE` with your intended repository and authenticate using an authorized account before uploading. Review the dry run first.
+Replace `OWNER/SPACE` with your intended repository. After repairing and validating the package, authenticate using an authorized account before uploading.
 
 On **25 September 2026**, the authenticated attempt to create `Raone320/SkinScanix` returned **HTTP 402** requiring a PRO subscription for Gradio CPU Basic hosting on that account. No Space was created, no files were uploaded and no subscription was purchased. There is **no verified Hugging Face demo URL**. This is the recorded account-specific outcome, not a promise about future hosting plans. A static-only site cannot execute this Python inference application.
 
@@ -714,7 +780,7 @@ Tests cover runtime selection, acne routing safeguards, candidate training helpe
 python -m pip install pypdf
 ```
 
-Before the latest deployment, 32 tests were discovered: 30 ran successfully in the app environment and two PDF-only tests were skipped there. The PDF tests had passed separately in an environment with the PDF dependency. Passing software tests does not establish diagnostic performance.
+At the September baseline review, 32 tests were discovered: 30 ran successfully in the app environment and two PDF-only tests were skipped there. The PDF tests had passed separately in an environment with the PDF dependency. Passing software tests does not establish diagnostic performance.
 
 Optional audits require the local datasets/candidate files; they do not download them:
 
@@ -723,10 +789,21 @@ python scripts/audit_skin_models.py work/scin_training_dataset_test/scin_trainin
 python scripts/evaluate_candidate_pipeline.py --candidate work/candidates/scin_balanced_20260920 --output outputs/candidate_pipeline.json
 ```
 
+Run the bounded-upload HTTP smoke check against a running local server:
+
+```bash
+python scripts/check_hosted_analysis.py http://127.0.0.1:7860/
+```
+
+It generates a synthetic large JPEG and submits analysis requests. It does not measure disease accuracy. Use an authorized test environment before directing it at a public service.
+
 ### Troubleshooting
 
 | Problem | Check / next step |
 |---|---|
+| Public analysis keeps spinning | Inspect Render Events for memory restarts, logs for stage completion, and the deployed commit. Refresh after recovery; do not repeatedly submit the same image |
+| Local is fast, Render is slow | Check cold start, upload size, queue waiting and CPU/memory availability; stage messages do not remove hosting limits |
+| Phone photo rejected as too large | Use JPEG within 50 MP and 10 MB, or resize other supported formats to 4 MP or less |
 | Local page does not open | Keep the launcher running, inspect its error output, and confirm port 7860 is available |
 | Same condition for many different images | Check active artifact, label order and preprocessing; audit class balance. Do not force a different label in UI code |
 | Real skin rejected as non-skin | Inspect gate performance and image framing; add reviewed hard cases to evaluation instead of bypassing all screening |
@@ -734,7 +811,7 @@ python scripts/evaluate_candidate_pipeline.py --candidate work/candidates/scin_b
 | Blurry/lighting warning | Current heuristics use minimum 200×200 size, Laplacian score below 12, or brightness outside 30–230; these are engineering thresholds, not clinical quality standards |
 | High confidence but wrong condition | Scores can be uncalibrated and wrong; save consented feedback for review, not automatic weight updates |
 | Model hash/label mismatch | Restore the matching approved artifact/labels/manifest or complete a reviewed promotion; do not disable verification |
-| Runtime/demo result | Check dependencies and model files; make sure the server environment has LiteRT |
+| Runtime/demo result | Check dependencies and model files; make sure the server environment has ONNX Runtime and LiteRT |
 | Pi cannot reach server | Use the inference computer's LAN IP, check trusted-network access, and verify the Flask endpoint rather than a Gradio page URL |
 | Phone cannot open localhost link | On a phone, localhost means the phone; use the reachable server LAN address or public demo |
 | Feedback disappears after deployment | Durable storage is not configured; local container files are not a permanent database |
@@ -749,7 +826,7 @@ This is a prototype, not a hardened multi-user health-data service. Use non-sens
 - Feedback explicitly copies the image when consent is given in Gradio. Avoid names, faces, tattoos and other identifying information; metadata/content can still be identifying.
 - Authentication, per-user report isolation, rate limiting, upload hardening, audit controls and durable-storage access rules require further work.
 - In particular, Flask's development feedback endpoint accepts a server-side `image_path`, and its consent default differs from the Gradio checkbox. Do not expose it to untrusted users without path restrictions, explicit consent validation and authorization.
-- Report filenames use timestamps; stronger unique IDs and access-controlled report retrieval are needed for concurrent public use.
+- Gradio report filenames include a UUID to avoid collisions. Unique names are not access control; authenticated, per-user report retrieval still needs work.
 - Use HTTPS for any public deployment. Restrict LAN testing to trusted networks; do not present Flask's development server as a production service.
 - Do not enable third-party image APIs or cloud backups without explaining the destination and obtaining appropriate consent.
 - Never infer that "normal," "uncertain," or a high-confidence benign label rules out a serious condition.
@@ -789,6 +866,8 @@ This is a prototype, not a hardened multi-user health-data service. Use non-sens
 
 ### Project documentation
 
+- [Current five-class release and internal evaluation](docs/NORMAL_SKIN_RELEASE_20261005.md)
+- [Render memory fix and upload limits](docs/RENDER_MEMORY_FIX.md)
 - [Model regression audit](docs/MODEL_REGRESSION_AUDIT.md)
 - [Balanced candidate training and metrics](docs/CANDIDATE_TRAINING_20260920.md)
 - [Eleven-condition data and pipeline audit](docs/ELEVEN_CLASS_DATA_AUDIT.md)
