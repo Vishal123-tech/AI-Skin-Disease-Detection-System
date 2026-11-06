@@ -62,6 +62,7 @@ The first visit to the Render demo may be slow while the server wakes up. Use a 
 
 ### Latest improvements
 
+- **Organized repository:** application code, dependency files and notebooks now live in folders, reducing the top-level file list from 41 entries to 16. The complete project guide remains in this README. [Find files and updated commands](#6-repository-guide).
 - **Photo guide:** framing, focus and lighting tips open beside the upload area.
 - **Visible progress:** the result panel shows each processing stage on every analysis, followed by a persistent completion summary.
 - **Better handling of phone uploads:** bounded image decoding, a small queue and one analysis at a time reduce memory pressure on the hosted service.
@@ -125,7 +126,7 @@ No. India/Maharashtra is an intended focus. Consented, expert-labeled local data
 
 The sections below cover the project from setup to deployment, including what is implemented, what remains experimental, and what still needs work.
 
-**Documentation review:** 6 November 2026. Latest application release documented here: `be5d0ea` (30 October 2026). Older guides retain earlier milestones; use this README and the active source for current behavior. The dates and measurements below are evidence from specific checks, not continuously updated health or accuracy guarantees.
+**Documentation review:** 6 November 2026. Repository organization: `3f3fb08`. Last verified Render application release: `be5d0ea` (30 October 2026). The folder cleanup has been tested locally and pushed to GitHub; it is not a new verified Render deployment. Older guides retain earlier milestones; use this README and the active source for current behavior. The dates and measurements below are evidence from specific checks, not continuously updated health or accuracy guarantees.
 
 <details>
 <summary><strong>Browse all 21 sections</strong></summary>
@@ -290,6 +291,23 @@ The core image classifiers use neural networks/transfer learning, including Mobi
 
 ## 6. Repository guide
 
+### Where to find things
+
+| Folder or file | What it contains | When to open it |
+|---|---|---|
+| [skinscanix/](skinscanix/) | Website callbacks, prediction, quality checks, PDF reports, feedback and Python utilities | Read or change the application code |
+| [models/](models/) | Model weights, class labels and the runtime manifest | Check which model is loaded |
+| [static/](static/) | Logo and website styles | Find visual assets |
+| [requirements/](requirements/) | Dependency lists for local use, deployment, training and Drive helpers | Set up the appropriate environment |
+| [scripts/](scripts/) | Model audits, candidate evaluation and deployment/smoke-check utilities | Check or maintain the project |
+| [tests/](tests/) | Automated regression checks | Verify a code change |
+| [docs/](docs/) | Detailed guides, release evidence and the [project presentation](docs/AI_Skin_Disease_Detection_End_to_End.pptx) | Explore the full technical background |
+| [docs/notebooks/](docs/notebooks/) | Colab data preparation and training notebooks | Work through a notebook workflow |
+| [run_local_ui.py](run_local_ui.py) | Small launcher for the local Gradio app | Start a local trial |
+| [gradio_app.py](gradio_app.py) | Small launcher for the hosted Gradio app | Use the existing Docker/Render entry point |
+
+### Folder layout
+
 ```text
 SkinScanix/
 ├── README.md                    # Full project guide
@@ -317,7 +335,28 @@ SkinScanix/
 └── render.yaml                 # Older Python-runtime blueprint
 ```
 
-The full README remains here. Python modules are grouped under `skinscanix/` to keep the repository file list compact. Run utility commands **from the repository root** with `python -m skinscanix.<module>`; the two launch commands above remain unchanged.
+The full README remains here. Python modules are grouped under `skinscanix/` to keep the repository file list compact. The root launchers call the implementations in that folder; they are not separate versions of the website.
+
+### Updated commands after the folder cleanup
+
+Run commands **from the repository root**—the folder containing this README—with your Python environment activated. `python -m skinscanix.<module>` runs a utility inside the package and lets its imports resolve correctly. For example, use `python -m skinscanix.app`, rather than running `python skinscanix/app.py` directly.
+
+| Task | Current command or location |
+|---|---|
+| Private local website | `python run_local_ui.py --host 127.0.0.1 --port 7860` — unchanged |
+| Hosted entry point | `python gradio_app.py` — unchanged; Docker/Render sets cloud environment variables |
+| Separate Flask API | `python -m skinscanix.app` |
+| Feedback review | `python -m skinscanix.review_feedback` |
+| Feedback statistics | `python -m skinscanix.self_train --stats` |
+| Training CLI options | `python -m skinscanix.train --help` |
+| Candidate training CLI options | `python -m skinscanix.train_candidate --help` |
+| Raspberry Pi client | `python -m skinscanix.pi_capture` — after configuring its server URL |
+| Automated checks | `python -m unittest discover -s tests -v` — unchanged |
+| Local dependencies | `requirements/requirements-space.txt`, plus the ONNX Runtime installation in [local setup](#7-local-installation) |
+| Deployment dependencies | `requirements/requirements-deploy.txt` — the Dockerfile uses this new location |
+| Colab notebooks | [docs/notebooks/](docs/notebooks/) |
+
+Existing model files, assets, data, uploads, reports and feedback directories keep their repository-root locations. A root `.env` file is still read from the same place. The cleanup does not move private images into the source package or change model weights, inference logic or the website design.
 
 Local runtime/work directories such as `uploads/`, `reports/`, `feedback/`, `data/`, `work/`, `outputs/` and `output/` are ignored by Git. They are not guaranteed to exist in a fresh clone. Ignoring a folder does not encrypt it or make cloud storage permanent.
 
@@ -724,6 +763,8 @@ Review `git diff` and tests before committing. Keep datasets, patient images, ge
 
 The verified service uses the checked-in **Dockerfile**, Python 3.12, CPU PyTorch, ONNX Runtime and LiteRT, and starts `python gradio_app.py`. The app binds to `0.0.0.0` using Render's `PORT`.
 
+After the repository cleanup, the Dockerfile copies `requirements/` before installing dependencies and includes `skinscanix/` when copying the application. The start command stays the same. Custom integrations that previously imported a root module must use its package name, for example `from skinscanix.predictor import SkinPredictor`. Deploying the reorganized code still requires the normal build and post-deployment checks below.
+
 The latest verified application deployment was **30 October 2026**, commit `be5d0ea`, adding the compact photo guide and visible progress stages. It includes `6d0fa4d`, which addressed repeated out-of-memory restarts observed on the 512 MB instance. Repeated public analysis/PDF trials succeeded after deployment; this is a dated verification, not a continuous uptime guarantee.
 
 Local processing can be faster because your computer may have more memory/CPU, there is no remote upload, and the process is already warm. The public service also has network latency, shared resources, queue waiting and possible cold starts. Progress messages explain work; they do not add compute capacity.
@@ -760,6 +801,8 @@ On **25 September 2026**, the authenticated attempt to create `Raone320/SkinScan
 ## 18. Testing and troubleshooting
 
 ### Automated tests
+
+The repository reorganization was checked locally with **38 passing tests and 2 optional PDF-layout tests skipped** (40 discovered). Three synthetic-image HTTP requests completed and returned PDFs, and the hosted launcher resolved the package with cloud sharing disabled. These checks verify the file moves and application behavior, not medical accuracy or a new live deployment.
 
 ```bash
 python -m unittest discover -s tests -v
