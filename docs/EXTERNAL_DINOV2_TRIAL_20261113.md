@@ -2,7 +2,7 @@
 
 ## Decision
 
-The owner requested an **experimental live trial** despite worse main held-out results for both normal-to-disease and disease-to-normal errors. The DINOv2 build deployed as commit `f05382b`, but the first public analysis pushed Render Free over its **512 MB memory limit** and restarted the instance. The checked-in deployment configuration was restored to the five-class model. This experiment is **not** an accuracy improvement or clinical validation.
+The owner requested an **experimental live trial** despite worse main held-out results for both normal-to-disease and disease-to-normal errors. The DINOv2 build deployed as commit `f05382b`, but the first public analysis pushed Render Free over its **512 MB memory limit** and restarted the instance. Recovery commit `4aceb29` restored the five-class model; a public synthetic-image analysis completed and returned a PDF. This experiment is **not** an accuracy improvement or clinical validation.
 
 ## Candidate and method
 

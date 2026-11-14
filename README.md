@@ -129,7 +129,7 @@ No. India/Maharashtra is an intended focus. Consented, expert-labeled local data
 
 The sections below cover the project from setup to deployment, including what is implemented, what remains experimental, and what still needs work.
 
-**Documentation review:** 14 November 2026. Last previously verified Render application release: `be5d0ea` (30 October 2026). Experimental DINOv2 commit `f05382b` was pushed and built on Render but exhausted the free instance's memory on a public analysis request; the current Docker/blueprint configuration selects the five-class model. A GitHub push alone does not confirm a successful Render release. The dates and measurements below are evidence from specific checks, not continuous health or accuracy guarantees.
+**Documentation review:** 14 November 2026. Verified Render application release: `4aceb29` (14 November 2026). Experimental DINOv2 commit `f05382b` built and started on Render but exhausted the free instance's memory during a public analysis request. The recovery release selects the five-class model and passed a public synthetic-image analysis and PDF smoke test. The dates and measurements below are specific checks, not continuous health or accuracy guarantees.
 
 <details>
 <summary><strong>Browse all 21 sections</strong></summary>
@@ -188,8 +188,8 @@ The intended regional focus is India, especially Maharashtra/Mumbai. **The curre
 | Area | Current implementation and evidence |
 |---|---|
 | Branding and UI | SkinScanix logo, responsive layout, light/dark themes, compact Settings and API panels |
-| Live website | Render release `be5d0ea` verified on 30 October 2026, including repeated analysis and PDF downloads |
-| Latest application changes | `be5d0ea`: photo guide and visible stages; `6d0fa4d`: upload-memory and concurrency fixes |
+| Live website | Render release `4aceb29` verified on 14 November 2026: five-class model loaded; synthetic public analysis completed and PDF returned |
+| Latest application changes | Experimental DINOv2 ONNX path and documentation in GitHub; ONNX-only demo-mode fix and subtle UI animation; five-class model remains selected on Render Free |
 | Main classifier | Default local and hosted configuration: pinned five-class MobileNetV2 ONNX. Optional DINOv2 FP16 ONNX experiment has 23 source labels and explicit unsupported-label handling; its public test exceeded the free host's memory |
 | Legacy classifier | Separate seven-label lesion fallback; not a unified 11-class model |
 | Skin gate | Bundled binary model plus heuristics; known false rejections remain |
@@ -810,7 +810,7 @@ The checked-in **Dockerfile** assembles the experimental DINOv2 ONNX model but s
 
 After the repository cleanup, the Dockerfile copies `requirements/` before installing dependencies and includes `skinscanix/` when copying the application. The start command stays the same. Custom integrations that previously imported a root module must use its package name, for example `from skinscanix.predictor import SkinPredictor`. Deploying the reorganized code still requires the normal build and post-deployment checks below.
 
-The latest verified application deployment was **30 October 2026**, commit `be5d0ea`, adding the compact photo guide and visible progress stages. It includes `6d0fa4d`, which addressed repeated out-of-memory restarts observed on the 512 MB instance. Repeated public analysis/PDF trials succeeded after deployment; this is a dated verification, not a continuous uptime guarantee.
+The latest verified application deployment was **14 November 2026**, commit `4aceb29`. Startup logs confirmed the pinned **five-class ONNX model** loaded. A synthetic, non-personal image submitted to the public `/analyze` endpoint completed without demo mode and returned a PDF. This is a software smoke test, not a model-accuracy evaluation or continuous uptime guarantee. The preceding DINOv2 deployment `f05382b` built and started but exceeded the free instance's 512 MB memory limit during analysis, so it is not selected on this host.
 
 Local processing can be faster because your computer may have more memory/CPU, there is no remote upload, and the process is already warm. The public service also has network latency, shared resources, queue waiting and possible cold starts. Progress messages explain work; they do not add compute capacity.
 
