@@ -3,7 +3,7 @@ FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 ENV PORT=7860
-ENV SKINSCANIX_MODEL=dinov2
+ENV SKINSCANIX_MODEL=current
 
 COPY requirements.txt .
 COPY requirements/ ./requirements/

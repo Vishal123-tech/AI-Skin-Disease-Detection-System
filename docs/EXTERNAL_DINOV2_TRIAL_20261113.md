@@ -2,7 +2,7 @@
 
 ## Decision
 
-The owner requested an **experimental live trial** despite worse main held-out results for both normal-to-disease and disease-to-normal errors. This is a trial of a different model, **not** an accuracy improvement or clinical validation. The standard five-class local model remains available for rollback. A GitHub push is not proof that the Render deployment has succeeded.
+The owner requested an **experimental live trial** despite worse main held-out results for both normal-to-disease and disease-to-normal errors. The DINOv2 build deployed as commit `f05382b`, but the first public analysis pushed Render Free over its **512 MB memory limit** and restarted the instance. The checked-in deployment configuration was restored to the five-class model. This experiment is **not** an accuracy improvement or clinical validation.
 
 ## Candidate and method
 
@@ -27,7 +27,7 @@ The owner requested an **experimental live trial** despite worse main held-out r
 
 On the internal test, the external model emitted 61 labels outside SkinScanix's four supported disease categories plus Normal. Its disease-name outputs therefore cannot be treated as interchangeable with the current five-class model. It matched 178 of the 268 disease labels after mapping the directly corresponding categories.
 
-The original local run took about 10 minutes for the 430 photos across the first three splits, including Python/model startup. A further 405-photo disease-only split was stopped after the main replacement checks had already failed. A compact ONNX export subsequently reproduced the three completed split counts and was smoke-tested through a local Gradio upload and PDF report. The public Render service still requires its own memory and end-to-end verification.
+The original local run took about 10 minutes for the 430 photos across the first three splits, including Python/model startup. A further 405-photo disease-only split was stopped after the main replacement checks had already failed. A compact ONNX export subsequently reproduced the three completed split counts and was smoke-tested through a local Gradio upload and PDF report. The public Render analysis **failed due to memory exhaustion** despite a successful build and startup.
 
 ## Experimental hosted artifact
 
@@ -36,7 +36,7 @@ The original local run took about 10 minutes for the 430 photos across the first
 - The saved image processor's bicubic 256-pixel resize, 224-pixel center crop, and ImageNet normalization were matched locally. On 60 balanced held-out images, the FP16 export and original model agreed on the top class for all 60; their maximum per-class probability difference was about 0.0028. The full 430-image comparison reproduced the original error counts above.
 - Dynamic INT8 variants were rejected because they caused severe prediction regressions. The hosted build uses **FP16**, not INT8.
 - The DINOv2 selection disables the old acne and legacy specialists. Unmapped source categories are shown as uncertain rather than silently assigned a supported disease name. The interface identifies the active model as experimental.
-- With ONNX memory caching disabled, a local Python/Gradio process used about 411 MB resident memory after an analysis on Windows. That is a local measurement, not a guarantee for Render's 512 MB instance.
+- With ONNX memory caching disabled, a local Python/Gradio process used about 411 MB resident memory after an analysis on Windows. Render's Linux instance exceeded 512 MB on a public analysis request, showing that the local measurement did not predict hosted peak memory.
 
 ## Reproduction
 

@@ -34,7 +34,7 @@
 
 You do not need to understand programming to try it. Open the demo on a phone or computer, choose an image you have permission to use, and select **Analyze image**. The result may be a possible condition, an uncertain answer, or a request for a suitable skin image—not a confirmed diagnosis.
 
-The project brings together a website, image-analysis models, PDF reports and an optional Raspberry Pi camera workflow. The standard local model includes **Normal Skin** alongside four condition categories. The Render deployment configuration now selects an **experimental DINOv2 model** with 23 source labels; the website maps only the supported categories and marks other outputs uncertain. Neither model is a healthy-skin test or a diagnosis.
+The project brings together a website, image-analysis models, PDF reports and an optional Raspberry Pi camera workflow. The default local and Render model includes **Normal Skin** alongside four condition categories. An optional **experimental DINOv2 model** has 23 source labels; the website maps only supported categories and marks other outputs uncertain. Neither model is a healthy-skin test or a diagnosis.
 
 ### Your first visit
 
@@ -63,7 +63,7 @@ The first visit to the Render demo may be slow while the server wakes up. Use a 
 ### Latest improvements
 
 - **ONNX runtime fix:** an available ONNX classifier is now recognized even when the older fallback model is absent. This fixes a local trial that showed "Demo mode" for every uploaded photo.
-- **Experimental DINOv2 release candidate:** the Render build configuration selects a compact, verified ONNX export of the 23-label external model. It made **more** errors than the previous model on the main held-out set; see the [comparison](#experimental-pretrained-model-comparison). Live availability must be checked after deployment.
+- **Experimental DINOv2 trial:** a compact, verified ONNX export of the 23-label external model is available in the repository. It made **more** errors on the main held-out set, and a public trial exceeded Render Free's 512 MB memory limit during analysis. The default hosted configuration therefore selects the five-class model. See the [comparison](#experimental-pretrained-model-comparison).
 - **Small interface animations:** the progress spinner and gentle transitions respect reduced-motion settings; they do not change model predictions.
 - **Organized repository:** application code, dependency files and notebooks now live in folders, reducing the top-level file list from 41 entries to 16. The complete project guide remains in this README. [Find files and updated commands](#6-repository-guide).
 - **Photo guide:** framing, focus and lighting tips open beside the upload area.
@@ -129,7 +129,7 @@ No. India/Maharashtra is an intended focus. Consented, expert-labeled local data
 
 The sections below cover the project from setup to deployment, including what is implemented, what remains experimental, and what still needs work.
 
-**Documentation review:** 14 November 2026. Last previously verified Render application release: `be5d0ea` (30 October 2026). The experimental DINOv2 build is a new deployment candidate; its GitHub push alone does not confirm a successful Render release. Older guides retain earlier milestones; use this README and the active source for current behavior. The dates and measurements below are evidence from specific checks, not continuously updated health or accuracy guarantees.
+**Documentation review:** 14 November 2026. Last previously verified Render application release: `be5d0ea` (30 October 2026). Experimental DINOv2 commit `f05382b` was pushed and built on Render but exhausted the free instance's memory on a public analysis request; the current Docker/blueprint configuration selects the five-class model. A GitHub push alone does not confirm a successful Render release. The dates and measurements below are evidence from specific checks, not continuous health or accuracy guarantees.
 
 <details>
 <summary><strong>Browse all 21 sections</strong></summary>
@@ -190,7 +190,7 @@ The intended regional focus is India, especially Maharashtra/Mumbai. **The curre
 | Branding and UI | SkinScanix logo, responsive layout, light/dark themes, compact Settings and API panels |
 | Live website | Render release `be5d0ea` verified on 30 October 2026, including repeated analysis and PDF downloads |
 | Latest application changes | `be5d0ea`: photo guide and visible stages; `6d0fa4d`: upload-memory and concurrency fixes |
-| Main classifier | Standard local: pinned five-class MobileNetV2 ONNX. Configured Render candidate: experimental DINOv2 FP16 ONNX with 23 source labels and explicit unsupported-label handling |
+| Main classifier | Default local and hosted configuration: pinned five-class MobileNetV2 ONNX. Optional DINOv2 FP16 ONNX experiment has 23 source labels and explicit unsupported-label handling; its public test exceeded the free host's memory |
 | Legacy classifier | Separate seven-label lesion fallback; not a unified 11-class model |
 | Skin gate | Bundled binary model plus heuristics; known false rejections remain |
 | PDF reports | Compact A4 layout; standard reports fit one page, unusually long notes continue |
@@ -421,7 +421,7 @@ The inference requirements include CPU PyTorch/torchvision and LiteRT. The addit
 
 ### Experimental pretrained-model trial
 
-The [DINOv2 skin model](https://huggingface.co/shindevaishnavi304/dinov2-finetuned-skin-disease) has 23 labels, including normal skin. The standard local launcher still uses the five-class model. The configured Render build uses the experimental DINOv2 ONNX export. Its normal-skin mistakes increased on the main held-out set, so treat its outputs as experimental. Labels outside SkinScanix's supported categories become **Unable to assess**. It does not retrain either model.
+The [DINOv2 skin model](https://huggingface.co/shindevaishnavi304/dinov2-finetuned-skin-disease) has 23 labels, including normal skin. The standard local and hosted launchers use the five-class model by default. Select DINOv2 explicitly only on a host with adequate measured memory. Its normal-skin mistakes increased on the main held-out set, so treat its outputs as experimental. Labels outside SkinScanix's supported categories become **Unable to assess**. It does not retrain either model.
 
 To run the same ONNX build locally without downloading the original PyTorch weights, assemble the two checked-in model parts and select it explicitly:
 
@@ -806,7 +806,7 @@ Review `git diff` and tests before committing. Keep datasets, patient images, ge
 
 ### Render — current live host
 
-The checked-in **Dockerfile** now assembles the experimental DINOv2 ONNX model, selects it with `SKINSCANIX_MODEL=dinov2`, installs ONNX Runtime and LiteRT, and starts `python gradio_app.py` on Python 3.12. Hosted inference does not require PyTorch. The app binds to `0.0.0.0` using Render's `PORT`. The older five-class model remains in the repository for rollback by changing the model selection and redeploying.
+The checked-in **Dockerfile** assembles the experimental DINOv2 ONNX model but selects the five-class model with `SKINSCANIX_MODEL=current` on Render Free. It installs ONNX Runtime and LiteRT and starts `python gradio_app.py` on Python 3.12. Hosted inference does not require PyTorch. The app binds to `0.0.0.0` using Render's `PORT`. The DINOv2 model remains opt-in for a host with enough memory.
 
 After the repository cleanup, the Dockerfile copies `requirements/` before installing dependencies and includes `skinscanix/` when copying the application. The start command stays the same. Custom integrations that previously imported a root module must use its package name, for example `from skinscanix.predictor import SkinPredictor`. Deploying the reorganized code still requires the normal build and post-deployment checks below.
 
@@ -816,7 +816,7 @@ Local processing can be faster because your computer may have more memory/CPU, t
 
 For updates: push reviewed changes → deploy the desired commit in Render → inspect build/startup logs → verify the public page and approved smoke tests. The existing service was manually deployed. Free-instance inactivity may cause a slow first request.
 
-`render.yaml` is a separate Python-runtime blueprint; it also assembles the ONNX model and selects DINOv2. The existing Render service uses the Dockerfile. Keep both deployment paths aligned when changing the model.
+`render.yaml` is a separate Python-runtime blueprint; it also assembles the ONNX model and selects the five-class default. The existing Render service uses the Dockerfile. Keep both deployment paths aligned when changing the model.
 
 ### Local Docker trial
 

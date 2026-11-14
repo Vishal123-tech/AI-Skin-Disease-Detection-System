@@ -7,7 +7,7 @@ services:
     healthCheckPath: /
     envVars:
       - key: SKINSCANIX_MODEL
-        value: dinov2
+        value: current
       - key: GEMINI_API_KEY
         sync: false
       - key: PORT
