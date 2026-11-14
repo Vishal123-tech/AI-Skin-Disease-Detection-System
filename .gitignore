@@ -19,3 +19,4 @@ gradio_output.txt
 public_url.txt
 .gradio/
 models/backups/
+models/dinov2/skin_model.onnx

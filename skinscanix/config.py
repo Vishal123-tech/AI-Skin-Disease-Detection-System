@@ -11,8 +11,10 @@ if _env_file.exists():
             os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 
 ROOT = Path(__file__).resolve().parents[1]
-MODEL_PATH = ROOT / "models" / "skin_model.tflite"
-LABELS_PATH = ROOT / "models" / "labels.txt"
+MODEL_FAMILY = os.environ.get("SKINSCANIX_MODEL", "current").strip().lower()
+MODEL_DIR = ROOT / "models" / "dinov2" if MODEL_FAMILY == "dinov2" else ROOT / "models"
+MODEL_PATH = MODEL_DIR / "skin_model.tflite"
+LABELS_PATH = MODEL_DIR / "labels.txt"
 ACNE_MODEL_PATH = ROOT / "models" / "acne_model.tflite"
 ACNE_LABELS_PATH = ROOT / "models" / "acne_labels.txt"
 GATE_MODEL_PATH = ROOT / "models" / "skin_gate.tflite"

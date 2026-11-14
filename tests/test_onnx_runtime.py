@@ -33,6 +33,15 @@ class OnnxRuntimeTests(unittest.TestCase):
         self.assertFalse(self.p.acne_focus)
         self.assertFalse(self.p.acne_priority)
 
+    def test_dinov2_pin_accepts_saved_bicubic_preprocessing(self):
+        self.p.labels = ['Acne and Rosacea Photos', 'normal skin']
+        self.manifest['class_names'] = self.p.labels
+        self.manifest['model_family'] = 'dinov2'
+        self.manifest['input_preprocessing'] = 'imagenet_rgb_exif_bicubic_resize256_centercrop224'
+        self.path.with_suffix('.runtime.json').write_text(json.dumps(self.manifest))
+        self.assertEqual(self.p._load_runtime_selection(), 'onnx')
+        self.assertEqual(self.p.preprocess_mode, self.manifest['input_preprocessing'])
+
     def test_corrupt_onnx_cannot_fall_back(self):
         self.artifact.write_bytes(b'wrong')
         with self.assertRaisesRegex(ValueError, 'checksum'):
@@ -49,6 +58,15 @@ class OnnxRuntimeTests(unittest.TestCase):
             predictor = SkinPredictor(self.path, labels)
         self.assertIsNone(predictor.gemini_model)
         self.assertFalse(predictor.acne_focus)
+
+    def test_onnx_without_legacy_is_not_demo(self):
+        for name in ('interpreter', 'legacy_interpreter', 'acne_interpreter',
+                     'pt_model', 'gemini_model'):
+            setattr(self.p, name, None)
+        self.p.onnx_session = object()
+        self.assertFalse(self.p.demo_mode)
+        self.p.onnx_session = None
+        self.assertTrue(self.p.demo_mode)
 
     def test_preprocessing_matches_torchvision_and_exif(self):
         from PIL import ImageOps

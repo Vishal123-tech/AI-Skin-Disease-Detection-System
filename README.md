@@ -34,7 +34,7 @@
 
 You do not need to understand programming to try it. Open the demo on a phone or computer, choose an image you have permission to use, and select **Analyze image**. The result may be a possible condition, an uncertain answer, or a request for a suitable skin image—not a confirmed diagnosis.
 
-The project brings together a website, image-analysis models, PDF reports and an optional Raspberry Pi camera workflow. The current main model includes **Normal Skin** alongside four condition categories; a separate legacy model handles selected lesion categories.
+The project brings together a website, image-analysis models, PDF reports and an optional Raspberry Pi camera workflow. The standard local model includes **Normal Skin** alongside four condition categories. The Render deployment configuration now selects an **experimental DINOv2 model** with 23 source labels; the website maps only the supported categories and marks other outputs uncertain. Neither model is a healthy-skin test or a diagnosis.
 
 ### Your first visit
 
@@ -62,11 +62,14 @@ The first visit to the Render demo may be slow while the server wakes up. Use a 
 
 ### Latest improvements
 
+- **ONNX runtime fix:** an available ONNX classifier is now recognized even when the older fallback model is absent. This fixes a local trial that showed "Demo mode" for every uploaded photo.
+- **Experimental DINOv2 release candidate:** the Render build configuration selects a compact, verified ONNX export of the 23-label external model. It made **more** errors than the previous model on the main held-out set; see the [comparison](#experimental-pretrained-model-comparison). Live availability must be checked after deployment.
+- **Small interface animations:** the progress spinner and gentle transitions respect reduced-motion settings; they do not change model predictions.
 - **Organized repository:** application code, dependency files and notebooks now live in folders, reducing the top-level file list from 41 entries to 16. The complete project guide remains in this README. [Find files and updated commands](#6-repository-guide).
 - **Photo guide:** framing, focus and lighting tips open beside the upload area.
 - **Visible progress:** the result panel shows each processing stage on every analysis, followed by a persistent completion summary.
 - **Better handling of phone uploads:** bounded image decoding, a small queue and one analysis at a time reduce memory pressure on the hosted service.
-- **Five-class main model:** Normal Skin joins Acne Vulgaris, Eczema, Fungal Infection and Psoriasis. This remains an experimental assessment, with known classification errors.
+- **Five-class local model:** Normal Skin joins Acne Vulgaris, Eczema, Fungal Infection and Psoriasis. It remains available by setting `SKINSCANIX_MODEL=current`.
 
 The latest UI and memory changes did not retrain the model. See [release evidence](#14-evaluation-and-known-results) for measured results and limitations.
 
@@ -83,7 +86,7 @@ The latest UI and memory changes did not retrain the model. See [release evidenc
 
 **Does it detect every skin disease?**
 
-No. The main classifier has four condition labels plus Normal Skin, and a separate legacy classifier has seven lesion labels. That is a list of possible labels, **not proof of reliable detection of all 11 conditions**. [See the scope](#3-supported-condition-labels).
+No. The standard local classifier has four condition labels plus Normal Skin, and a separate legacy classifier has seven lesion labels. The experimental DINOv2 model has 23 source labels, but SkinScanix does not claim to recognize all 23: unsupported outputs become **Unable to assess**. Label counts are **not proof of reliable detection**. [See the scope](#3-supported-condition-labels).
 
 **Does “95% confidence” mean a 95% chance that I have that disease?**
 
@@ -126,7 +129,7 @@ No. India/Maharashtra is an intended focus. Consented, expert-labeled local data
 
 The sections below cover the project from setup to deployment, including what is implemented, what remains experimental, and what still needs work.
 
-**Documentation review:** 6 November 2026. Repository organization: `3f3fb08`. Last verified Render application release: `be5d0ea` (30 October 2026). The folder cleanup has been tested locally and pushed to GitHub; it is not a new verified Render deployment. Older guides retain earlier milestones; use this README and the active source for current behavior. The dates and measurements below are evidence from specific checks, not continuously updated health or accuracy guarantees.
+**Documentation review:** 14 November 2026. Last previously verified Render application release: `be5d0ea` (30 October 2026). The experimental DINOv2 build is a new deployment candidate; its GitHub push alone does not confirm a successful Render release. Older guides retain earlier milestones; use this README and the active source for current behavior. The dates and measurements below are evidence from specific checks, not continuously updated health or accuracy guarantees.
 
 <details>
 <summary><strong>Browse all 21 sections</strong></summary>
@@ -187,7 +190,7 @@ The intended regional focus is India, especially Maharashtra/Mumbai. **The curre
 | Branding and UI | SkinScanix logo, responsive layout, light/dark themes, compact Settings and API panels |
 | Live website | Render release `be5d0ea` verified on 30 October 2026, including repeated analysis and PDF downloads |
 | Latest application changes | `be5d0ea`: photo guide and visible stages; `6d0fa4d`: upload-memory and concurrency fixes |
-| Main classifier | Pinned five-class MobileNetV2 ONNX model, including Normal Skin |
+| Main classifier | Standard local: pinned five-class MobileNetV2 ONNX. Configured Render candidate: experimental DINOv2 FP16 ONNX with 23 source labels and explicit unsupported-label handling |
 | Legacy classifier | Separate seven-label lesion fallback; not a unified 11-class model |
 | Skin gate | Bundled binary model plus heuristics; known false rejections remain |
 | PDF reports | Compact A4 layout; standard reports fit one page, unusually long notes continue |
@@ -203,16 +206,17 @@ Deploying the UI and report changes did **not** retrain the model or prove impro
 
 ## 3. Supported condition labels
 
-The main classifier has **five labels: four conditions and Normal Skin**. The legacy classifier adds seven lesion labels. These are separate models, not a unified or clinically validated 12-class detector.
+The standard local classifier has **five labels: four conditions and Normal Skin**. The legacy classifier adds seven lesion labels. The experimental DINOv2 classifier has 23 source labels; only Normal Skin and selected Acne, Eczema, Fungal Infection and Psoriasis outputs map into the site's existing result categories. Other outputs are uncertain. These are separate models, not a unified or clinically validated detector.
 
 | Classifier | Condition labels |
 |---|---|
 | Main MobileNetV2 ONNX model — 5 classes | Acne Vulgaris; Eczema; Fungal Infection; Psoriasis; **Normal Skin** |
+| Experimental DINOv2 ONNX model — 23 source classes | Selected Acne, Eczema, Fungal Infection, Psoriasis and **Normal Skin** classes map to site categories; the remaining outputs are uncertain |
 | Legacy lesion model — 7 classes | Actinic Keratoses; Basal Cell Carcinoma; Benign Keratosis-like Lesions; Dermatofibroma; Melanocytic Nevi; Melanoma; Vascular Lesions |
 
 The legacy model is associated with dermoscopic lesion imagery. Its scores cannot simply be compared with the common-condition model's scores as though both were one calibrated classifier.
 
-Additional outputs include non-skin, uncertain input, and runtime/demo status. **Normal Skin is now an active model label**, but it does not confirm that a person is healthy or rule out disease. Scabies and Vitiligo are not classes in the active five-class model. Dataset names such as **SCIN** describe the source/model, not a disease.
+Additional outputs include non-skin, uncertain input, and runtime/demo status. **Normal Skin is an available model label**, but it does not confirm that a person is healthy or rule out disease. Scabies and Vitiligo are not classes in the five-class model. Dataset names such as **SCIN** describe the source/model, not a disease.
 
 ## 4. End-to-end architecture
 
@@ -415,6 +419,30 @@ Theme previews: `http://127.0.0.1:7860/?__theme=light` and `http://127.0.0.1:786
 
 The inference requirements include CPU PyTorch/torchvision and LiteRT. The additional ONNX Runtime install is required because `requirements/requirements-space.txt` does not currently include it. Full TensorFlow is not needed for the pinned ONNX model. These server wheels are not the Raspberry Pi camera client's installation requirements.
 
+### Experimental pretrained-model trial
+
+The [DINOv2 skin model](https://huggingface.co/shindevaishnavi304/dinov2-finetuned-skin-disease) has 23 labels, including normal skin. The standard local launcher still uses the five-class model. The configured Render build uses the experimental DINOv2 ONNX export. Its normal-skin mistakes increased on the main held-out set, so treat its outputs as experimental. Labels outside SkinScanix's supported categories become **Unable to assess**. It does not retrain either model.
+
+To run the same ONNX build locally without downloading the original PyTorch weights, assemble the two checked-in model parts and select it explicitly:
+
+```powershell
+python scripts/assemble_dinov2.py
+$env:SKINSCANIX_MODEL = "dinov2"
+python run_local_ui.py --host 127.0.0.1 --port 7866
+```
+
+The two parts total about 174 MB; the assembled file is ignored by Git. The model source is Apache-2.0 licensed. The export's SHA-256, label order, preprocessing and model revision are pinned in `models/dinov2/skin_model.runtime.json`. Set `SKINSCANIX_MODEL=current` to use the previous five-class model locally.
+
+After setting up the standard local environment, download the pinned external weights separately and start the trial (about 346 MB for the weights):
+
+```powershell
+python -m pip install transformers==5.5.4
+python -c "from huggingface_hub import snapshot_download; snapshot_download('shindevaishnavi304/dinov2-finetuned-skin-disease', revision='2d631c6f61021a58f540ae15fb4f35240a3b6c4b', allow_patterns=['model.safetensors','config.json','preprocessor_config.json'], local_dir='work/candidates/external_dinov2_20261113/model')"
+python scripts/launch_external_dinov2_trial.py --host 127.0.0.1 --port 7866
+```
+
+Open `http://127.0.0.1:7866/` on that computer. To try it on a phone connected to the same trusted network, use `--host 0.0.0.0` and open `http://YOUR_COMPUTER_LAN_IP:7866/`. The original downloaded weights, trial reports and feedback stay under the Git-ignored `work/` folder; the compact ONNX export is included as checked-in parts. See the [comparison and limitations](docs/EXTERNAL_DINOV2_TRIAL_20261113.md).
+
 ## 8. Using the website and PDF report
 
 1. Open the local or public Gradio page.
@@ -543,7 +571,9 @@ The client is a prototype: it retains its local capture and needs request timeou
 
 | Artifact | Role / current selection |
 |---|---|
-| `models/skin_model.onnx` + `labels.txt` | Active five-class MobileNetV2 model, including Normal Skin |
+| `models/skin_model.onnx` + `labels.txt` | Default local five-class MobileNetV2 model, including Normal Skin |
+| `models/dinov2/skin_model.part0` + `part1` | Experimental FP16 ONNX DINOv2 model; assembled during the Render build and selected with `SKINSCANIX_MODEL=dinov2` |
+| `models/dinov2/skin_model.runtime.json` + `labels.txt` | DINOv2 artifact hash, 23 source labels and bicubic preprocessing pin |
 | `models/skin_model.tflite` | Retained older baseline; not the active main runtime |
 | `models/skin_model.runtime.json` | Active artifact hash, label order, preprocessing and acne-cross-check selection |
 | `models/skin_gate.tflite` + `skin_gate_labels.txt` | Binary skin/non-skin gate |
@@ -558,9 +588,9 @@ The local prediction path combines trained models with color/document heuristics
 
 A feedback checkpoint trained with **one image and zero replay images** replaced a useful baseline in an earlier workflow and predicted Eczema on all 79 audited images. Its recorded 100% validation score came from reusing the one training image, not independent testing.
 
-The runtime manifest now pins the **five-class ONNX artifact**, its label order and preprocessing: EXIF orientation, RGB, shorter-side resize to 256, center crop to 224 and ImageNet normalization. The export includes softmax. This differs from the earlier TFLite preprocessing; mixing them changes predictions. A hash/label mismatch stops loading rather than silently selecting different weights. Do not edit the hash simply to suppress an error.
+Each model has its own runtime manifest, pinned label order and preprocessing. The five-class model uses EXIF orientation, RGB, shorter-side resize to 256, center crop to 224 and ImageNet normalization. The DINOv2 export uses the same geometry with **bicubic** resize. Both exports include softmax. A hash/label mismatch stops loading rather than silently selecting different weights. Do not edit the hash simply to suppress an error.
 
-The bundled binary acne specialist is disabled by the current manifest and is not loaded when both optional acne modes are off. The legacy model remains available for low-confidence broad-model results; legacy inference is skipped when broad confidence is at least 0.65. These routing rules are not clinical thresholds.
+The bundled binary acne specialist is disabled by both manifests and is not loaded when both optional acne modes are off. The legacy model can support the five-class local pipeline at low confidence, but is not used with the experimental DINOv2 path. These routing rules are not clinical thresholds.
 
 An optional Gemini code path exists, but the active manifest sets `force_local: true` and disables remote inference. Gemini is not required by the documented installation; `run_local_ui.py` also clears its key for the process. Enabling a remote model changes the data flow and requires a separate privacy/evaluation review; it is not evidence of additional validated disease coverage.
 
@@ -656,6 +686,20 @@ No current script certifies that a candidate is clinically safe or automatically
 
 ## 14. Evaluation and known results
 
+### Experimental pretrained-model comparison
+
+On 13 November 2026, a locally downloaded DINOv2 classifier with a normal-skin class was compared with the active raw classifier using existing held-out photos. It was **not** an end-to-end clinical evaluation. The external model has 23 output labels; outputs outside the four SkinScanix disease categories are counted separately rather than called correct.
+
+| Same held-out images | Current model | External DINOv2 |
+|---|---:|---:|
+| Normal-labelled photos correctly called Normal, main set (75) | 65 | 57 |
+| Normal-labelled photos called Eczema, main set (75) | 2 | 6 |
+| Disease-labelled photos called Normal, main set (268) | 13 | 21 |
+| Normal-labelled background photos correctly called Normal (68) | 61 | 57 |
+| Normal-labelled photos correctly called Normal, separate source (19) | 8 | 17 |
+
+The favorable 19-photo result comes from only one source group; it does not establish reliability on everyday phone photos. The larger main set shows worse normal-skin and disease-to-normal errors. **The owner requested an experimental live trial despite this regression.** It should not be described as an accuracy improvement. Original labels are source-described/provisional, not independently clinician-confirmed. The FP16 ONNX export matched the original model's top prediction on 60 balanced samples and reproduced the same error counts on all three recorded splits (430 images); this verifies export behavior, not clinical validity. Read the [full trial notes](docs/EXTERNAL_DINOV2_TRIAL_20261113.md) for the label mapping, local workflow and limitations.
+
 ### Current five-class release: recorded internal evaluation
 
 The [5 October release report](docs/NORMAL_SKIN_RELEASE_20261005.md) records **248/347 correct pipeline outputs (71.47%)**. These are small, imbalanced, provisional-label development samples—not an independent clinical test or a promise of accuracy on your photos.
@@ -742,6 +786,7 @@ See [the feedback guide](docs/FEEDBACK_LOOP.md). Do not upload health images to 
 | Setting | Meaning |
 |---|---|
 | `PORT` | Gradio port, default `7860`; Render supplies its port |
+| `SKINSCANIX_MODEL` | `current` (default) chooses the five-class local model; `dinov2` chooses the experimental 23-label ONNX model after `scripts/assemble_dinov2.py` |
 | `SERVER_URL` | Pi client's Flask prediction URL; default `http://127.0.0.1:5000/api/predict` |
 | `GEMINI_API_KEY` | Optional remote-model path when a compatible SDK is installed; leave unset for bundled-model inference |
 | `ACNE_FOCUS_MODE` | Experimental binary-only acne mode, default off |
@@ -751,7 +796,7 @@ See [the feedback guide](docs/FEEDBACK_LOOP.md). Do not upload health images to 
 | `GOOGLE_DRIVE_TOKEN_JSON` | OAuth token JSON for the helper; secret, never commit |
 | `GOOGLE_DRIVE_CLIENT_JSON` + `GOOGLE_DRIVE_REFRESH_TOKEN` | Alternative OAuth configuration supported by the helper |
 
-`MODEL_PATH`, `LABELS_PATH`, `IMAGE_SIZE=(224, 224)` and `MAX_UPLOAD_MB=10` are Python constants in `skinscanix/config.py`, not automatically configurable environment variables. Flask's host/port are CLI arguments.
+`MODEL_PATH` and `LABELS_PATH` are Python paths derived from `SKINSCANIX_MODEL`; they are not arbitrary path settings. `IMAGE_SIZE=(224, 224)` and `MAX_UPLOAD_MB=10` are Python constants in `skinscanix/config.py`. Flask's host/port are CLI arguments.
 
 ## 17. Deployment
 
@@ -761,7 +806,7 @@ Review `git diff` and tests before committing. Keep datasets, patient images, ge
 
 ### Render — current live host
 
-The verified service uses the checked-in **Dockerfile**, Python 3.12, CPU PyTorch, ONNX Runtime and LiteRT, and starts `python gradio_app.py`. The app binds to `0.0.0.0` using Render's `PORT`.
+The checked-in **Dockerfile** now assembles the experimental DINOv2 ONNX model, selects it with `SKINSCANIX_MODEL=dinov2`, installs ONNX Runtime and LiteRT, and starts `python gradio_app.py` on Python 3.12. Hosted inference does not require PyTorch. The app binds to `0.0.0.0` using Render's `PORT`. The older five-class model remains in the repository for rollback by changing the model selection and redeploying.
 
 After the repository cleanup, the Dockerfile copies `requirements/` before installing dependencies and includes `skinscanix/` when copying the application. The start command stays the same. Custom integrations that previously imported a root module must use its package name, for example `from skinscanix.predictor import SkinPredictor`. Deploying the reorganized code still requires the normal build and post-deployment checks below.
 
@@ -771,7 +816,7 @@ Local processing can be faster because your computer may have more memory/CPU, t
 
 For updates: push reviewed changes → deploy the desired commit in Render → inspect build/startup logs → verify the public page and approved smoke tests. The existing service was manually deployed. Free-instance inactivity may cause a slow first request.
 
-**Important:** `render.yaml` is an older Python-runtime blueprint and lacks the Dockerfile's explicit CPU PyTorch installation step. Use the existing Docker service/Dockerfile for the verified setup; do not assume applying the older blueprint reproduces it.
+`render.yaml` is a separate Python-runtime blueprint; it also assembles the ONNX model and selects DINOv2. The existing Render service uses the Dockerfile. Keep both deployment paths aligned when changing the model.
 
 ### Local Docker trial
 
@@ -845,7 +890,7 @@ It generates a synthetic large JPEG and submits analysis requests. It does not m
 | Blurry/lighting warning | Current heuristics use minimum 200×200 size, Laplacian score below 12, or brightness outside 30–230; these are engineering thresholds, not clinical quality standards |
 | High confidence but wrong condition | Scores can be uncalibrated and wrong; save consented feedback for review, not automatic weight updates |
 | Model hash/label mismatch | Restore the matching approved artifact/labels/manifest or complete a reviewed promotion; do not disable verification |
-| Runtime/demo result | Check dependencies and model files; make sure the server environment has ONNX Runtime and LiteRT |
+| Runtime/demo result | Check dependencies and model files; make sure the server environment has ONNX Runtime and LiteRT. The ONNX-only path must also count as an available model; see `SkinPredictor.demo_mode` and its regression test. |
 | Pi cannot reach server | Use the inference computer's LAN IP, check trusted-network access, and verify the Flask endpoint rather than a Gradio page URL |
 | Phone cannot open localhost link | On a phone, localhost means the phone; use the reachable server LAN address or public demo |
 | Feedback disappears after deployment | Durable storage is not configured; local container files are not a permanent database |
@@ -901,6 +946,7 @@ This is a prototype, not a hardened multi-user health-data service. Use non-sens
 ### Project documentation
 
 - [Current five-class release and internal evaluation](docs/NORMAL_SKIN_RELEASE_20261005.md)
+- [Experimental DINOv2 comparison and export](docs/EXTERNAL_DINOV2_TRIAL_20261113.md)
 - [Render memory fix and upload limits](docs/RENDER_MEMORY_FIX.md)
 - [Model regression audit](docs/MODEL_REGRESSION_AUDIT.md)
 - [Balanced candidate training and metrics](docs/CANDIDATE_TRAINING_20260920.md)
@@ -919,6 +965,7 @@ The last two guides and some training instructions predate runtime pinning and t
 - [ISIC challenge data](https://challenge.isic-archive.com/data/)
 - [COCO downloads](https://cocodataset.org/#download)
 - [Original Hugging Face seven-class baseline source](https://huggingface.co/syaha/skin_cancer_detection_model)
+- [External DINOv2 source model (Apache-2.0)](https://huggingface.co/shindevaishnavi304/dinov2-finetuned-skin-disease)
 
 These identify project data/model sources; they are not endorsements of clinical suitability.
 

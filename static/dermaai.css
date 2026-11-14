@@ -65,3 +65,33 @@ html, body, gradio-app, .gradio-container { background: var(--da-bg) !important;
 @media(prefers-reduced-motion:reduce) { .gradio-container * { transition:none !important; animation:none !important; } }
 #brand-header header > div > div { color:var(--da-brand) !important; }
 #educational-notice { margin-top:16px; }
+
+/* Lightweight motion: no timers, layout animation, or inference changes. */
+.analysis-card { box-sizing:border-box; min-height:390px; padding:26px; border:1px solid var(--da-border); border-radius:16px; background:var(--da-panel); display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; }
+.analysis-card h3 { color:var(--da-text); font-size:21px; margin:12px 0; }
+.analysis-card p:not(.eyebrow) { color:var(--da-secondary); font-size:14px; line-height:1.8; max-width:360px; }
+.analysis-spinner { display:block; box-sizing:border-box; width:38px; height:38px; margin-bottom:20px; border:3px solid var(--da-border); border-top-color:var(--da-warn-text); border-right-color:var(--da-warn-text); border-radius:50%; }
+@keyframes skinscanix-enter { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes skinscanix-fade { from { opacity:0; } to { opacity:1; } }
+@keyframes skinscanix-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:no-preference) {
+  #brand-header { animation:skinscanix-enter 360ms ease-out both; }
+  #intro { animation:skinscanix-enter 360ms 40ms ease-out both; }
+  .workflow { animation:skinscanix-enter 360ms 80ms ease-out both; }
+  #skin-upload { animation:skinscanix-enter 360ms 100ms ease-out both; }
+  .result-empty, .result-card { animation:skinscanix-enter 300ms ease-out both; }
+  .analysis-spinner { animation:skinscanix-spin 900ms linear infinite; }
+  #photo-guide:popover-open { animation:skinscanix-fade 180ms ease-out; }
+  #analyze-button { transition:background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
+  #skin-upload { transition:border-color 180ms ease, box-shadow 180ms ease; }
+  #skin-upload:focus-within { box-shadow:0 0 0 3px var(--da-warn-bg); }
+  @media (hover:hover) and (pointer:fine) {
+    #analyze-button:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 6px 20px #e75b0b24; }
+    #skin-upload:hover { border-color:var(--da-warn-text) !important; }
+  }
+  #analyze-button:active:not(:disabled) { transform:translateY(0); box-shadow:0 2px 8px #e75b0b12; }
+}
+@media (max-width:700px) { .analysis-card { min-height:300px; padding:20px; } }
+@media (prefers-reduced-motion:reduce) {
+  .gradio-container *, .gradio-container *::before, .gradio-container *::after { animation:none !important; transition:none !important; }
+}

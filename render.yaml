@@ -2,10 +2,12 @@ services:
   - type: web
     name: ai-skin-disease-detection
     runtime: python
-    buildCommand: pip install -r requirements/requirements-deploy.txt
+    buildCommand: pip install -r requirements/requirements-deploy.txt && python scripts/assemble_dinov2.py
     startCommand: python gradio_app.py
     healthCheckPath: /
     envVars:
+      - key: SKINSCANIX_MODEL
+        value: dinov2
       - key: GEMINI_API_KEY
         sync: false
       - key: PORT

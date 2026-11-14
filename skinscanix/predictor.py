@@ -354,6 +354,16 @@ DISEASE_INFO: dict[str, dict] = {
 
 # ─── Helper Utilities ─────────────────────────────────────────────────────────
 
+DINO_SUPPORTED_LABELS = {
+    "Acne and Rosacea Photos": "Acne Vulgaris",
+    "Atopic Dermatitis Photos": "Eczema",
+    "Eczema Photos": "Eczema",
+    "Nail Fungus and other Nail Disease": "Fungal Infection",
+    "Tinea Ringworm Candidiasis and other Fungal Infections": "Fungal Infection",
+    "Psoriasis pictures Lichen Planus and related diseases": "Psoriasis",
+    "normal skin": "Normal Skin",
+}
+
 def _get_disease_info(raw_label: str) -> dict:
     """Fuzzy-match a raw model label to the disease taxonomy."""
     norm = raw_label.strip().lower().replace("_", " ")
@@ -476,6 +486,24 @@ def prepare_onnx_image(image_path: str) -> np.ndarray:
     mean = np.array([.485, .456, .406], dtype=np.float32)[:, None, None]
     std = np.array([.229, .224, .225], dtype=np.float32)[:, None, None]
     return np.ascontiguousarray(((tensor - mean) / std)[None])
+
+
+def prepare_dinov2_image(image_path: str) -> np.ndarray:
+    """Match the external model's saved bicubic 256/224 PIL processor."""
+    with Image.open(image_path) as source:
+        image = ImageOps.exif_transpose(source).convert("RGB")
+    original_width, original_height = image.size
+    if original_width < original_height:
+        width, height = 256, int(256 * original_height / original_width)
+    else:
+        width, height = int(256 * original_width / original_height), 256
+    image = image.resize((width, height), Image.Resampling.BICUBIC)
+    left, top = (width - 224) // 2, (height - 224) // 2
+    image = image.crop((left, top, left + 224, top + 224))
+    pixels = np.asarray(image, dtype=np.float32).transpose(2, 0, 1) / np.float32(255.)
+    mean = np.array([.485, .456, .406], dtype=np.float32)[:, None, None]
+    std = np.array([.229, .224, .225], dtype=np.float32)[:, None, None]
+    return np.ascontiguousarray(((pixels - mean) / std)[None])
 
 
 class SkinPredictor:
@@ -639,13 +667,15 @@ class SkinPredictor:
         if backend not in {"tflite", "onnx"}:
             raise ValueError("Unsupported pinned model backend")
         artifact = self.model_path.with_suffix(".onnx") if backend == "onnx" else self.model_path
-        digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+        with artifact.open("rb") as model_file:
+            digest = hashlib.file_digest(model_file, "sha256").hexdigest()
         if digest != manifest.get("sha256"):
             raise ValueError("Pinned model checksum mismatch; review the model before activation")
         if self.labels != manifest.get("class_names"):
             raise ValueError("Pinned model label order mismatch")
         mode = manifest.get("input_preprocessing")
-        valid_modes = ({"imagenet_rgb_exif_resize256_centercrop224"} if backend == "onnx"
+        valid_modes = ({"imagenet_rgb_exif_resize256_centercrop224",
+                        "imagenet_rgb_exif_bicubic_resize256_centercrop224"} if backend == "onnx"
                        else {"raw_0_255", "zero_one", "minus_one_to_one"})
         if mode not in valid_modes:
             raise ValueError("Pinned model preprocessing is missing or invalid")
@@ -668,6 +698,11 @@ class SkinPredictor:
             options = ort.SessionOptions()
             options.intra_op_num_threads = 2
             options.inter_op_num_threads = 1
+            if self.runtime_manifest.get("model_family") == "dinov2":
+                # Keep the experimental large model within a modest CPU host.
+                options.enable_cpu_mem_arena = False
+                options.enable_mem_pattern = False
+                options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
             self.onnx_session = ort.InferenceSession(
                 str(self.model_path.with_suffix(".onnx")), sess_options=options,
                 providers=["CPUExecutionProvider"],
@@ -884,6 +919,7 @@ class SkinPredictor:
     def demo_mode(self) -> bool:
         return (
             self.interpreter is None
+            and self.onnx_session is None
             and self.legacy_interpreter is None
             and self.acne_interpreter is None
             and self.pt_model is None
@@ -1015,7 +1051,9 @@ RULES:
     def _run_local_model(self, image_path: str) -> np.ndarray:
         """Run the local model and return a probability array."""
         if self.backend == "onnx":
-            tensor = prepare_onnx_image(image_path)
+            tensor = (prepare_dinov2_image(image_path)
+                      if self.preprocess_mode == "imagenet_rgb_exif_bicubic_resize256_centercrop224"
+                      else prepare_onnx_image(image_path))
             output = self.onnx_session.run(None, {"image": tensor})[0][0]
             if (output.shape != (len(self.labels),) or not np.all(np.isfinite(output))
                     or np.any(output < 0) or not np.isclose(output.sum(), 1., atol=1e-4)):
@@ -1278,7 +1316,8 @@ RULES:
         # ── Run model ─────────────────────────────────────────────────────────
         probs = self._run_local_model(image_path)
         active_labels = self.labels
-        selected_model = "SCIN"
+        is_dinov2 = getattr(self, "runtime_manifest", {}).get("model_family") == "dinov2"
+        selected_model = "DINOv2 experimental" if is_dinov2 else "SCIN"
         index = int(np.argmax(probs))
         confidence = float(probs[index])
 
@@ -1287,7 +1326,7 @@ RULES:
         # the SCIN expert is weak and the legacy expert is clearly confident.
         # This keeps both taxonomies available without pretending their scores
         # are directly comparable.
-        if confidence < 0.65 and self.legacy_interpreter is not None and self.legacy_labels:
+        if not is_dinov2 and confidence < 0.65 and self.legacy_interpreter is not None and self.legacy_labels:
             legacy_probs = self._run_legacy_model(image_path)
             legacy_confidence = float(np.max(legacy_probs))
             if confidence < 0.65 and legacy_confidence >= 0.75:
@@ -1297,7 +1336,9 @@ RULES:
 
         index = int(np.argmax(probs))
         confidence = float(probs[index])
-        raw_label = active_labels[index] if index < len(active_labels) else f"Class {index}"
+        raw_model_label = active_labels[index] if index < len(active_labels) else f"Class {index}"
+        raw_label = (DINO_SUPPORTED_LABELS.get(raw_model_label, "Unmapped skin condition")
+                     if is_dinov2 else raw_model_label)
 
         # Top-3 predictions
         top_idx = np.argsort(probs)[::-1][:3]
@@ -1379,6 +1420,12 @@ RULES:
             }
             label = f"❓ Uncertain — Low model confidence ({confidence:.1%}); no condition confirmed"
 
+        elif "unmapped skin condition" in norm:
+            category = "uncertain"
+            info = {"description": "The external model suggested a category outside the supported SkinScanix labels. No condition is confirmed.",
+                    "severity": "No condition confirmed", "emoji": "❓", "category": "uncertain"}
+            label = "Unable to assess — model suggested a category outside the supported conditions"
+
         elif "non skin" in norm or "other" in norm or "background" in norm:
             category = "non_skin"
             info = DISEASE_INFO["Other_Non_Skin"]
@@ -1415,6 +1462,7 @@ RULES:
                     else ""
                 )
                 + f" | Disease model: {selected_model}"
+                + (f" | External raw class: {raw_model_label}" if is_dinov2 else "")
             ),
         }
 

@@ -49,7 +49,8 @@ ANALYSIS_LOCK = Lock()
 def analysis_stage(message):
     return (
         '<section class="analysis-card" role="status" aria-live="polite" aria-atomic="true">'
-        '<p>ANALYSIS IN PROGRESS</p>'
+        '<span class="analysis-spinner" aria-hidden="true"></span>'
+        '<p class="eyebrow">ANALYSIS IN PROGRESS</p>'
         f'<h3>{message}</h3>'
         '<p>Please keep this page open. Your result will appear here.</p></section>'
     )

@@ -3,15 +3,14 @@ FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 ENV PORT=7860
+ENV SKINSCANIX_MODEL=dinov2
 
 COPY requirements.txt .
 COPY requirements/ ./requirements/
-RUN pip install --no-cache-dir \
-        torch==2.6.0 torchvision==0.21.0 \
-        --index-url https://download.pytorch.org/whl/cpu \
-    && pip install --no-cache-dir -r requirements/requirements-deploy.txt
+RUN pip install --no-cache-dir -r requirements/requirements-deploy.txt
 
 COPY . .
+RUN python scripts/assemble_dinov2.py
 
 EXPOSE 7860
 CMD ["sh", "-c", "python gradio_app.py"]
