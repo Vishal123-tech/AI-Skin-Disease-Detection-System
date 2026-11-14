@@ -97,6 +97,9 @@ supported = {
 def external_broad(self, image_path):
     result = original_broad(image_path)
     result["model_used"] = "External DINOv2 local trial"
+    result["notes"] = result.get("notes", "").replace(
+        "Disease model: SCIN", "Disease model: External DINOv2 local trial"
+    )
     raw = result["raw_class"]
     if result["category"] in ("non_skin", "uncertain") or raw == "normal skin":
         return result
